@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         KAAUH Lab - Robust Buttons & Highlighting + Barcode/MRN Dual Entry
 // @namespace    Violentmonkey Scripts
-// @version      5.9
+// @version      5.9.1
 // @description  Performance-optimized entry engines, clean single-observer architecture, layout-safe grid highlighting, and real-time live clock calendar rolling tracking.
 // @match        *://his.kaauh.org/lab/*
 // @grant        GM_addStyle
@@ -16,9 +16,8 @@
 (function () {
     'use strict';
 
-    const CURRENT_VERSION = 5.9; // Synchronized with metadata
-
-    console.log(`KAAUH Lab - Robust Buttons & Highlighting + Dual Entry v${CURRENT_VERSION} Loading...`);
+    const scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : 'Unknown';
+    console.log(`KAAUH Lab - Robust Buttons & Highlighting + Dual Entry v${scriptVersion} Loading...`);
 
     //================================================================================
     // ALL STYLES CONSOLIDATED (PERFORMANCE-TUNED COMPILATION)
@@ -990,5 +989,5 @@
     masterObserverCallback();
 
     window.addEventListener('hashchange', () => { tryInjectSidebarMenu(); });
-    console.log(`KAAUH Lab Script v${CURRENT_VERSION} fully loaded!`);
+    console.log(`KAAUH Lab Script v${scriptVersion} fully loaded!`);
 })();
