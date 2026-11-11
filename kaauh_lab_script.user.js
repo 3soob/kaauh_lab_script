@@ -7,19 +7,16 @@
 // @grant        GM_addStyle
 // @grant        GM_setValue
 // @grant        GM_getValue
-// @grant        GM_xmlhttpRequest
 // @run-at       document-idle
 // @author       Hamad Al-Shegifi
 // @updateURL    https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/kaauh_lab_script.user.js
 // @downloadURL  https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/kaauh_lab_script.user.js
 // ==/UserScript==
 
-
 (function () {
     'use strict';
 
-    const CURRENT_VERSION = 5.7;
-    const SCRIPT_UPDATE_URL = 'file:////10.9.28.57/data/scripts/kaauh_lab_script.js';
+    const CURRENT_VERSION = 5.9; // Synchronized with metadata
 
     console.log(`KAAUH Lab - Robust Buttons & Highlighting + Dual Entry v${CURRENT_VERSION} Loading...`);
 
@@ -114,9 +111,8 @@
         selectedWorkbenchId: null,
         isProcessingReset: false,
         gridObserverActive: false,
-        scrollListenerAttached: false,
         targetPageSize: null,
-        cachedButtons: [] // Added for button optimization
+        cachedButtons: []
     };
 
     //================================================================================
@@ -228,7 +224,6 @@
             else if (!startD && endD) forceAngularUpdate(originalInput, endD, endD);
         };
 
-        // User adjusted a dropdown manually -> Suspend auto-rolling updates to avoid fighting the user
         const onUserManualChange = () => {
             sessionStorage.setItem('kaauh_date_tracking_active', 'false');
             triggerSync();
@@ -246,7 +241,6 @@
             startGroup.setDate(startD);
             endGroup.setDate(endD);
 
-            // If targeted to today, lock tracking parameters into memory for background execution loops
             if (endOffset === 0) {
                 sessionStorage.setItem('kaauh_date_tracking_active', 'true');
                 sessionStorage.setItem('kaauh_date_start_offset', startOffset.toString());
@@ -277,26 +271,21 @@
         const isTrackingActive = sessionStorage.getItem('kaauh_date_tracking_active') === 'true';
 
         if (isTrackingActive) {
-            // Live rolling tracking configuration was active, calculate fresh bounds relative to right now
             const offset = parseInt(sessionStorage.getItem('kaauh_date_start_offset') || '-7', 10);
             applyPreset(offset, 0);
         } else if (savedStartMs || savedEndMs) {
-            // Static custom historical parameters selected previously, bind cleanly
             if (savedStartMs) startGroup.setDate(new Date(parseInt(savedStartMs)));
             if (savedEndMs) endGroup.setDate(new Date(parseInt(savedEndMs)));
             setTimeout(triggerSync, 100);
         } else {
-            // System Cold Boot Execution -> Apply Last Week dynamic engine parameters by default
             applyPreset(-7, 0);
         }
 
-        // Expose a performance-safe endpoint hook for master observers to sync live clock operations seamlessly
         originalInput.checkAndRollDate = () => {
             if (sessionStorage.getItem('kaauh_date_tracking_active') === 'true') {
                 const clockNow = new Date();
                 const currentUiEnd = endGroup.getDate();
 
-                // If the clock day rolls over into a new real-world date, shift parameters automatically
                 if (!currentUiEnd || currentUiEnd.toDateString() !== clockNow.toDateString()) {
                     const offset = parseInt(sessionStorage.getItem('kaauh_date_start_offset') || '-7', 10);
                     const rollingStart = new Date(clockNow);
@@ -552,12 +541,10 @@
     //================================================================================
     // LAYOUT REPAINT OPTIMIZED HIGH-SPEED CELLS HIGHLIGHTING
     //================================================================================
-    function applyConditionalCellStyles() {
-        const rows = document.querySelectorAll('.ag-center-cols-container .ag-row');
+    function applyConditionalCellStyles(targetRows = null) {
+        const rows = targetRows || document.querySelectorAll('.ag-center-cols-container .ag-row');
         if (rows.length === 0) return;
 
-        // Optimization: Rather than iterating over all cells in every row, we query specifically
-        // for the columns we need to check, and use dataset caching to skip unneeded classList updates.
         rows.forEach(row => {
             // Clinic check for EMERGENCY
             const clinicCell = row.querySelector('.ag-cell[col-id="clinic"]');
@@ -573,7 +560,7 @@
             if (testStatusCell) {
                 const text = testStatusCell.textContent.trim();
                 let newClass = '';
-                
+
                 if (text === 'Resulted') newClass = 'kaauh-status-resulted';
                 else if (text === 'Ordered') newClass = 'kaauh-status-ordered';
                 else if (text.startsWith('VerifiedLevel')) newClass = 'kaauh-status-verified';
@@ -606,22 +593,33 @@
         });
     }
 
-    function setupGridScrollListener() {
-        const gridViewport = document.querySelector(SELECTORS.agBodyViewport);
-        if (!gridViewport) { state.scrollListenerAttached = false; return; }
-        if (state.scrollListenerAttached) return;
-
-        // Uses passive listener to avoid blocking main thread scrolling
-        gridViewport.addEventListener('scroll', () => { requestAnimationFrame(applyConditionalCellStyles); }, { passive: true });
-        state.scrollListenerAttached = true;
-    }
-
     function watchGridForChanges() {
         const gridContainer = document.querySelector('.ag-center-cols-container');
-        if (!gridContainer) { state.gridObserverActive = false; return; }
-        if (state.gridObserverActive) return;
+        if (!gridContainer || state.gridObserverActive) return;
 
-        const gridObserver = new MutationObserver(() => { applyConditionalCellStyles(); });
+        let pendingFrame = null;
+        let accumulatedRows = new Set();
+
+        const gridObserver = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.type === 'childList') {
+                    mutation.addedNodes.forEach(node => {
+                        if (node.nodeType === 1 && node.classList.contains('ag-row')) {
+                            accumulatedRows.add(node);
+                        }
+                    });
+                }
+            }
+
+            if (accumulatedRows.size > 0 && !pendingFrame) {
+                pendingFrame = requestAnimationFrame(() => {
+                    applyConditionalCellStyles(Array.from(accumulatedRows));
+                    accumulatedRows.clear();
+                    pendingFrame = null;
+                });
+            }
+        });
+
         gridObserver.observe(gridContainer, { childList: true, subtree: true });
         state.gridObserverActive = true;
     }
@@ -631,7 +629,6 @@
     //================================================================================
     function updateButtonSelection(selectedId) {
         state.selectedWorkbenchId = selectedId;
-        // Optimization: Use cached buttons instead of querying the DOM again
         state.cachedButtons.forEach(btn => {
             if (btn.dataset.workbenchId === selectedId) {
                 if (!btn.classList.contains('selected')) btn.classList.add('selected');
@@ -660,11 +657,10 @@
 
         const group = document.createElement('div');
         group.className = 'filter-btn-group';
-        
-        // Optimization: use a DocumentFragment for batch DOM insertions
+
         const fragment = document.createDocumentFragment();
         let colorIndex = 0;
-        state.cachedButtons = []; // Reset cache
+        state.cachedButtons = [];
 
         for (const [name, id] of Object.entries(workbenches)) {
             const btn = document.createElement('button');
@@ -673,10 +669,10 @@
             const sessionKey = `workbench_status_${id || 'all'}`;
             let currentStatus = sessionStorage.getItem(sessionKey) || 'Ordered';
             btn.textContent = `${name} (${currentStatus})`;
-            
-            if (select.value === id) { 
-                btn.classList.add('selected'); 
-                state.selectedWorkbenchId = id; 
+
+            if (select.value === id) {
+                btn.classList.add('selected');
+                state.selectedWorkbenchId = id;
             }
 
             btn.addEventListener('click', async () => {
@@ -696,11 +692,11 @@
                     if (optToSelect) await setAndVerifyDropdown(statusDropdown, optToSelect.value, 'Status');
                 }
             });
-            
+
             state.cachedButtons.push(btn);
             fragment.appendChild(btn);
         }
-        
+
         group.appendChild(fragment);
         target.parentNode.insertBefore(group, target.nextSibling);
         if (!state.selectedWorkbenchId && select.value) updateButtonSelection(select.value);
@@ -923,7 +919,7 @@
         } catch (e) { console.error(e); }
     }
 
-   function tryInjectSidebarMenu() {
+    function tryInjectSidebarMenu() {
         const INJECT_ID = '__custom-lab-test-status';
         if (document.getElementById(INJECT_ID)) {
             document.getElementById(INJECT_ID).classList.toggle('active', window.location.hash.startsWith('#/lab-orders/lab-test-analyzer'));
@@ -944,9 +940,7 @@
         tWrap.appendChild(tSpan); anchor.appendChild(iSpan); anchor.appendChild(tWrap);
         host.appendChild(anchor); inner.appendChild(host); outer.appendChild(inner);
 
-        // Use prepend() instead of appendChild() to force it to the top of the menu
         listMenu.prepend(outer);
-
         anchor.classList.toggle('active', window.location.hash.startsWith('#/lab-orders/lab-test-analyzer'));
     }
 
@@ -967,7 +961,6 @@
 
             document.querySelectorAll('input[bsdaterangepicker]').forEach(upgradeInput);
 
-            // Execute live rolling checks for all upgraded elements across dates/midnights
             document.querySelectorAll('input[bsdaterangepicker][data-upgraded="true"]').forEach(input => {
                 if (typeof input.checkAndRollDate === 'function') input.checkAndRollDate();
             });
@@ -979,7 +972,6 @@
             ensureEntryButtonsExist();
             insertFilterButtons();
             addStatusDropdownListener();
-            setupGridScrollListener();
             watchGridForChanges();
             manageInfoPanelVisibility();
 
@@ -988,61 +980,10 @@
                 await applyFiltersWithRetry();
                 state.hasAppliedInitialFilters = true;
             }
+            // Catch any existing rows on initial load before the observer has caught mutations
             applyConditionalCellStyles();
         }, 100);
     }
-
-    //================================================================================
-    // BACKGROUND UPDATE CHECKER ENGINE
-    //================================================================================
-    function showUpdateNotification(newVersion) {
-        if (document.getElementById('kaauh-update-notification') || sessionStorage.getItem('kaauh_skip_update_notif') === String(newVersion)) return;
-        
-        const notif = document.createElement('div');
-        notif.id = 'kaauh-update-notification';
-        notif.innerHTML = `
-            <div style="font-weight:bold;margin-bottom:5px;font-size:15px;">🚀 Script Update Available!</div>
-            <div style="margin-bottom:8px;">Version <b>${newVersion}</b> was found on the network.</div>
-            <div style="font-size:12px;margin-bottom:10px;opacity:0.9;">Please click "Check for updates" in your Tampermonkey/Violentmonkey extension menu to install it.</div>
-            <button id="kaauh-update-dismiss" style="width:100%;padding:6px;background:#fff;color:#d35400;border:none;border-radius:4px;font-weight:bold;cursor:pointer;">Dismiss</button>
-        `;
-        Object.assign(notif.style, {
-            position: 'fixed', bottom: '25px', right: '25px', backgroundColor: '#d35400', color: 'white',
-            padding: '18px', borderRadius: '8px', boxShadow: '0 8px 20px rgba(0,0,0,0.4)', zIndex: '10001',
-            fontFamily: 'sans-serif', fontSize: '13px', width: '280px', transition: 'all 0.3s ease'
-        });
-        
-        document.body.appendChild(notif);
-        document.getElementById('kaauh-update-dismiss').addEventListener('click', () => {
-            notif.remove();
-            sessionStorage.setItem('kaauh_skip_update_notif', String(newVersion));
-        });
-    }
-
-    function checkForUpdates() {
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: SCRIPT_UPDATE_URL,
-            onload: function(response) {
-                if (response.status === 200 || response.status === 0) { // file:// returns status 0 usually
-                    const match = response.responseText.match(/@version\s+([\d\.]+)/);
-                    if (match && match[1]) {
-                        const remoteVersion = parseFloat(match[1]);
-                        if (remoteVersion > CURRENT_VERSION) {
-                            showUpdateNotification(remoteVersion);
-                        }
-                    }
-                }
-            },
-            onerror: function(err) {
-                console.warn('[Update Engine] Network path check failed. Make sure "Allow access to file URLs" is enabled in your extension settings.', err);
-            }
-        });
-    }
-
-    // Initialize checking routines (Delay first check by 5 seconds to let UI load, then loop every 60 seconds)
-    setTimeout(checkForUpdates, 5000);
-    setInterval(checkForUpdates, 60000);
 
     const observer = new MutationObserver(masterObserverCallback);
     observer.observe(document.body, { childList: true, subtree: true });
