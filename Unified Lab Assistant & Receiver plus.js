@@ -13,9 +13,8 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
-// @downloadURL https://update.greasyfork.org/scripts/555452/Unified%20Lab%20Assistant%20%20Receiver%20plus.user.js
-// @updateURL https://update.greasyfork.org/scripts/555452/Unified%20Lab%20Assistant%20%20Receiver%20plus.meta.js
-// ==/UserScript==
+// @downloadURL https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/Unified%20Lab%20Assistant%20&%20Receiver%20plus
+// @updateURL https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/Unified%20Lab%20Assistant%20&%20Receiver%20plus
 
 (function () {
     'use strict';
