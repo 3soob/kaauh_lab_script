@@ -13,8 +13,8 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
-// @downloadURL  https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/Unified%20Lab%20Assistant%20&%20Receiver%20plus
-// @updateURL    https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/Unified%20Lab%20Assistant%20&%20Receiver%20plus
+// @downloadURL  https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/Unified_Lab_Assistant&Receiver_plus.js
+// @updateURL    https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/Unified_Lab_Assistant&Receiver_plus.js
 // ==/UserScript==
 
 // Global namespace orchestration
