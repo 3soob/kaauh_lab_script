@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        KAAUH Lab Super Suite
 // @namespace   Violentmonkey Scripts
-// @version     15.0.0
+// @version     15.1
 // @description Merges verification buttons (F7/F8), dynamic alerts (including HbA1c check and improved 'No Result' detection), critical & amended result reporting, intelligently relocates misplaced alerts, and adds an advanced, flicker-free inline sample counter with a modern visual interface. Includes Server Status Indicator.
 // @match       *://his.kaauh.org/lab/*
 // @grant       GM_addStyle
