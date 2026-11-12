@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         KAAUH Lab - Robust Buttons & Highlighting + Barcode/MRN Dual Entry
 // @namespace    Violentmonkey Scripts
-// @version      5.9.2
+// @version      5.9.3
 // @description  Performance-optimized entry engines, clean single-observer architecture, layout-safe grid highlighting, and real-time live clock calendar rolling tracking.
 // @match        *://his.kaauh.org/lab/*
 // @grant        GM_addStyle
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_xmlhttpRequest
 // @run-at       document-idle
 // @author       Hamad Al-Shegifi
 // @updateURL    https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/kaauh_lab_script.user.js
@@ -16,8 +17,10 @@
 (function () {
     'use strict';
 
-    const scriptVersion = typeof GM_info !== 'undefined' ? GM_info.script.version : 'Unknown';
-    console.log(`KAAUH Lab - Robust Buttons & Highlighting + Dual Entry v${scriptVersion} Loading...`);
+    const CURRENT_VERSION = 5.9;
+    const SCRIPT_UPDATE_URL = 'file:////10.9.28.57/data/scripts/kaauh_lab_script.js';
+
+    console.log(`KAAUH Lab - Robust Buttons & Highlighting + Dual Entry v${CURRENT_VERSION} [PERFORMANCE OPTIMIZED] Loading...`);
 
     //================================================================================
     // ALL STYLES CONSOLIDATED (PERFORMANCE-TUNED COMPILATION)
@@ -55,7 +58,7 @@
         .ag-row:hover .ag-cell { background-color: lightblue !important; }
         .kaauh-row-emergency .ag-cell { background-color: #ffcccb !important; color: black !important; }
 
-        /* HIGH PRIORITIZATION STATUS & SAMPLE OVERRIDES (Defeats row emergency & hover cascades) */
+        /* HIGH PRIORITIZATION STATUS & SAMPLE OVERRIDES */
         .ag-row .ag-cell.kaauh-status-resulted, .ag-row:hover .ag-cell.kaauh-status-resulted { background-color: #ffb733 !important; color: black !important; }
         .ag-row .ag-cell.kaauh-status-ordered, .ag-row:hover .ag-cell.kaauh-status-ordered { background-color: yellow !important; color: black !important; }
         .ag-row .ag-cell.kaauh-status-verified, .ag-row:hover .ag-cell.kaauh-status-verified { background-color: lightgreen !important; color: black !important; }
@@ -110,8 +113,10 @@
         selectedWorkbenchId: null,
         isProcessingReset: false,
         gridObserverActive: false,
+        scrollListenerAttached: false,
         targetPageSize: null,
-        cachedButtons: []
+        cachedButtons: [],
+        gridUpdatePending: false
     };
 
     //================================================================================
@@ -148,58 +153,25 @@
 
         const daySelect = document.createElement('select');
         daySelect.className = 'native-select';
-        const dayPlaceholder = document.createElement('option');
-        dayPlaceholder.value = ""; dayPlaceholder.text = "Day"; dayPlaceholder.disabled = true; dayPlaceholder.selected = true;
-        daySelect.appendChild(dayPlaceholder);
-        for (let i = 1; i <= 31; i++) {
-            const opt = document.createElement('option');
-            opt.value = i; opt.text = i.toString().padStart(2, '0');
-            daySelect.appendChild(opt);
-        }
+        daySelect.innerHTML = `<option value="" disabled selected>Day</option>` +
+            Array.from({length: 31}, (_, i) => `<option value="${i+1}">${(i+1).toString().padStart(2, '0')}</option>`).join('');
 
         const monthSelect = document.createElement('select');
         monthSelect.className = 'native-select';
-        const monthPlaceholder = document.createElement('option');
-        monthPlaceholder.value = ""; monthPlaceholder.text = "Month"; monthPlaceholder.disabled = true; monthPlaceholder.selected = true;
-        monthSelect.appendChild(monthPlaceholder);
-        MONTHS.forEach((m, idx) => {
-            const opt = document.createElement('option');
-            opt.value = idx; opt.text = m;
-            monthSelect.appendChild(opt);
-        });
+        monthSelect.innerHTML = `<option value="" disabled selected>Month</option>` +
+            MONTHS.map((m, idx) => `<option value="${idx}">${m}</option>`).join('');
 
         const yearSelect = document.createElement('select');
         yearSelect.className = 'native-select';
-        const yearPlaceholder = document.createElement('option');
-        yearPlaceholder.value = ""; yearPlaceholder.text = "Year"; yearPlaceholder.disabled = true; yearPlaceholder.selected = true;
-        yearSelect.appendChild(yearPlaceholder);
-        YEARS.forEach(y => {
-            const opt = document.createElement('option');
-            opt.value = y; opt.text = y;
-            yearSelect.appendChild(opt);
-        });
+        yearSelect.innerHTML = `<option value="" disabled selected>Year</option>` +
+            YEARS.map(y => `<option value="${y}">${y}</option>`).join('');
 
-        container.appendChild(lbl);
-        container.appendChild(daySelect);
-        container.appendChild(monthSelect);
-        container.appendChild(yearSelect);
+        container.append(lbl, daySelect, monthSelect, yearSelect);
 
-        const getDate = () => {
-            if (daySelect.value && monthSelect.value && yearSelect.value) {
-                return new Date(parseInt(yearSelect.value), parseInt(monthSelect.value), parseInt(daySelect.value));
-            }
-            return null;
-        };
+        const getDate = () => (daySelect.value && monthSelect.value && yearSelect.value) ? new Date(parseInt(yearSelect.value), parseInt(monthSelect.value), parseInt(daySelect.value)) : null;
+        const setDate = (d) => { daySelect.value = d.getDate(); monthSelect.value = d.getMonth(); yearSelect.value = d.getFullYear(); };
 
-        const setDate = (d) => {
-            daySelect.value = d.getDate();
-            monthSelect.value = d.getMonth();
-            yearSelect.value = d.getFullYear();
-        };
-
-        daySelect.addEventListener('change', onChangeCallback);
-        monthSelect.addEventListener('change', onChangeCallback);
-        yearSelect.addEventListener('change', onChangeCallback);
+        [daySelect, monthSelect, yearSelect].forEach(sel => sel.addEventListener('change', onChangeCallback));
 
         return { container, getDate, setDate };
     }
@@ -217,10 +189,7 @@
             const endD = endGroup.getDate();
             if (startD) sessionStorage.setItem('tamper_start_ms', startD.getTime());
             if (endD) sessionStorage.setItem('tamper_end_ms', endD.getTime());
-
-            if (startD && endD) forceAngularUpdate(originalInput, startD, endD);
-            else if (startD && !endD) forceAngularUpdate(originalInput, startD, startD);
-            else if (!startD && endD) forceAngularUpdate(originalInput, endD, endD);
+            forceAngularUpdate(originalInput, startD || endD, endD || startD);
         };
 
         const onUserManualChange = () => {
@@ -230,6 +199,7 @@
 
         const startGroup = createDropdownGroup("Start", onUserManualChange);
         const endGroup = createDropdownGroup("End", onUserManualChange);
+
         const btnRow = document.createElement('div');
         btnRow.className = 'native-btn-row';
 
@@ -249,20 +219,15 @@
             triggerSync();
         };
 
-        const todayBtn = document.createElement('button');
-        todayBtn.className = 'range-btn'; todayBtn.innerText = 'Today'; todayBtn.title = 'Today Only';
-        todayBtn.addEventListener('click', (e) => { e.preventDefault(); applyPreset(0, 0); });
+        const createBtn = (text, title, startOffset, endOffset) => {
+            const btn = document.createElement('button');
+            btn.className = 'range-btn'; btn.innerText = text; btn.title = title;
+            btn.addEventListener('click', (e) => { e.preventDefault(); applyPreset(startOffset, endOffset); });
+            return btn;
+        };
 
-        const weekBtn = document.createElement('button');
-        weekBtn.className = 'range-btn'; weekBtn.innerText = 'Last Week'; weekBtn.title = '-7 Days to Today';
-        weekBtn.addEventListener('click', (e) => { e.preventDefault(); applyPreset(-7, 0); });
-
-        const monthBtn = document.createElement('button');
-        monthBtn.className = 'range-btn'; monthBtn.innerText = 'Last Month'; monthBtn.title = '-30 Days to Today';
-        monthBtn.addEventListener('click', (e) => { e.preventDefault(); applyPreset(-30, 0); });
-
-        btnRow.appendChild(todayBtn); btnRow.appendChild(weekBtn); btnRow.appendChild(monthBtn);
-        wrapper.appendChild(startGroup.container); wrapper.appendChild(endGroup.container); wrapper.appendChild(btnRow);
+        btnRow.append(createBtn('Today', 'Today Only', 0, 0), createBtn('Last Week', '-7 Days to Today', -7, 0), createBtn('Last Month', '-30 Days to Today', -30, 0));
+        wrapper.append(startGroup.container, endGroup.container, btnRow);
         originalInput.parentNode.insertBefore(wrapper, originalInput);
 
         const savedStartMs = sessionStorage.getItem('tamper_start_ms');
@@ -270,8 +235,7 @@
         const isTrackingActive = sessionStorage.getItem('kaauh_date_tracking_active') === 'true';
 
         if (isTrackingActive) {
-            const offset = parseInt(sessionStorage.getItem('kaauh_date_start_offset') || '-7', 10);
-            applyPreset(offset, 0);
+            applyPreset(parseInt(sessionStorage.getItem('kaauh_date_start_offset') || '-7', 10), 0);
         } else if (savedStartMs || savedEndMs) {
             if (savedStartMs) startGroup.setDate(new Date(parseInt(savedStartMs)));
             if (savedEndMs) endGroup.setDate(new Date(parseInt(savedEndMs)));
@@ -284,20 +248,9 @@
             if (sessionStorage.getItem('kaauh_date_tracking_active') === 'true') {
                 const clockNow = new Date();
                 const currentUiEnd = endGroup.getDate();
-
                 if (!currentUiEnd || currentUiEnd.toDateString() !== clockNow.toDateString()) {
-                    const offset = parseInt(sessionStorage.getItem('kaauh_date_start_offset') || '-7', 10);
-                    const rollingStart = new Date(clockNow);
-                    rollingStart.setDate(clockNow.getDate() + offset);
-
-                    startGroup.setDate(rollingStart);
-                    endGroup.setDate(clockNow);
-
-                    forceAngularUpdate(originalInput, rollingStart, clockNow);
-
-                    sessionStorage.setItem('tamper_start_ms', rollingStart.getTime());
-                    sessionStorage.setItem('tamper_end_ms', clockNow.getTime());
-                    console.log('[Calendar Engine] Date rolled forward automatically into matching current real-world "Today".');
+                    applyPreset(parseInt(sessionStorage.getItem('kaauh_date_start_offset') || '-7', 10), 0);
+                    console.log('[Calendar Engine] Date rolled forward automatically.');
                 }
             }
         };
@@ -306,33 +259,31 @@
     //================================================================================
     // FILTER PERSISTENCE AND STATE ENFORCEMENT
     //================================================================================
-    async function saveFilterValues(filters) {
-        try { await GM_setValue(FILTER_PERSISTENCE_KEY, JSON.stringify(filters)); } catch (e) { console.error(e); }
-    }
+    const saveFilterValues = async (filters) => { try { await GM_setValue(FILTER_PERSISTENCE_KEY, JSON.stringify(filters)); } catch (e) { console.error(e); } };
+    const loadFilterValues = async () => { try { const f = await GM_getValue(FILTER_PERSISTENCE_KEY, null); return f ? JSON.parse(f) : {}; } catch { return {}; } };
+    const clearSavedFilters = async () => { try { await GM_setValue(FILTER_PERSISTENCE_KEY, JSON.stringify({})); } catch (e) { console.error(e); } };
 
-    async function loadFilterValues() {
-        try { const f = await GM_getValue(FILTER_PERSISTENCE_KEY, null); return f ? JSON.parse(f) : {}; } catch { return {}; }
-    }
-
-    async function clearSavedFilters() {
-        try { await GM_setValue(FILTER_PERSISTENCE_KEY, JSON.stringify({})); } catch (e) { console.error(e); }
-    }
-
+    // Async recursive timeout avoids memory-leaking zombie intervals
     function robustClearInput(inputElement) {
         if (!inputElement || inputElement.value === '') return;
-        inputElement.value = '';
-        inputElement.dispatchEvent(new Event('input', { bubbles: true }));
-        inputElement.dispatchEvent(new Event('change', { bubbles: true }));
-        inputElement.dispatchEvent(new Event('blur', { bubbles: true }));
+        
+        const clearAction = () => {
+            inputElement.value = '';
+            inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+            inputElement.dispatchEvent(new Event('change', { bubbles: true }));
+            inputElement.dispatchEvent(new Event('blur', { bubbles: true }));
+        };
+        
+        clearAction();
         let cycles = 0;
-        const enforcer = setInterval(() => {
-            if (!document.body.contains(inputElement) || cycles >= 5) { clearInterval(enforcer); return; }
-            if (inputElement.value !== '') {
-                inputElement.value = '';
-                inputElement.dispatchEvent(new Event('input', { bubbles: true }));
-            }
+        
+        const check = () => {
+            if (!document.body.contains(inputElement) || cycles >= 5) return;
+            if (inputElement.value !== '') clearAction();
             cycles++;
-        }, 100);
+            setTimeout(check, 100);
+        };
+        setTimeout(check, 100);
     }
 
     async function performFullReset() {
@@ -357,7 +308,7 @@
 
     function setAndVerifyDropdown(dropdown, targetValue, description, duration = 1000) {
         return new Promise((resolve) => {
-            if (!dropdown) { return resolve(false); }
+            if (!dropdown) return resolve(false);
             if (dropdown.value === targetValue) return resolve(true);
 
             dropdown.value = targetValue;
@@ -365,14 +316,18 @@
             dropdown.dispatchEvent(new Event('change', { bubbles: true }));
 
             let cycles = 0;
-            const interval = setInterval(() => {
-                if (!document.body.contains(dropdown)) { clearInterval(interval); return resolve(false); }
+            const maxCycles = duration / 100;
+            
+            const check = () => {
+                if (!document.body.contains(dropdown)) return resolve(false);
                 if (dropdown.value !== targetValue) {
                     dropdown.value = targetValue;
                     dropdown.dispatchEvent(new Event('change', { bubbles: true }));
                 }
-                if (++cycles >= (duration / 100)) { clearInterval(interval); return resolve(dropdown.value === targetValue); }
-            }, 100);
+                if (++cycles >= maxCycles) return resolve(dropdown.value === targetValue);
+                setTimeout(check, 100);
+            };
+            setTimeout(check, 100);
         });
     }
 
@@ -383,25 +338,14 @@
         const dropdown = document.getElementById("dropdownPaginationPageSize");
         if (!dropdown) return;
 
-        if (!state.targetPageSize) {
-            state.targetPageSize = await GM_getValue(PAGINATION_SIZE_KEY, "500");
-        }
+        if (!state.targetPageSize) state.targetPageSize = await GM_getValue(PAGINATION_SIZE_KEY, "500");
 
         const targetSizes = ["10", "50", "100", "500"];
         const currentOptions = Array.from(dropdown.options).map(opt => opt.value);
-        let optionsChanged = false;
-
         const isMismatch = targetSizes.length !== currentOptions.length || targetSizes.some((val, index) => currentOptions[index] !== val);
 
         if (isMismatch) {
-            dropdown.innerHTML = '';
-            targetSizes.forEach(size => {
-                const opt = document.createElement('option');
-                opt.value = size;
-                opt.text = size;
-                dropdown.appendChild(opt);
-            });
-            optionsChanged = true;
+            dropdown.innerHTML = targetSizes.map(size => `<option value="${size}">${size}</option>`).join('');
         }
 
         if (dropdown.dataset.pageSizeListenerAttached !== 'true') {
@@ -410,13 +354,12 @@
                 if (state.targetPageSize !== newSize) {
                     state.targetPageSize = newSize;
                     await GM_setValue(PAGINATION_SIZE_KEY, newSize);
-                    console.log(`[Pagination Engine] Stored default viewport restriction: ${newSize} items.`);
                 }
             });
             dropdown.dataset.pageSizeListenerAttached = 'true';
         }
 
-        if (dropdown.value !== state.targetPageSize || optionsChanged) {
+        if (dropdown.value !== state.targetPageSize || isMismatch) {
             dropdown.value = state.targetPageSize;
             dropdown.dispatchEvent(new Event('change', { bubbles: true }));
         }
@@ -428,13 +371,13 @@
     function setColumnFilter(columnName, value, shouldPersist = true) {
         const headerViewport = document.querySelector(SELECTORS.agHeaderViewport);
         if (!headerViewport) return false;
+        
         const allCols = Array.from(headerViewport.querySelectorAll('.ag-header-cell')).map(cell => cell.getAttribute('col-id'));
         const columnIndex = allCols.indexOf(columnName);
         if (columnIndex === -1) return false;
 
         const filterInput = headerViewport.querySelector(`.ag-header-row[aria-rowindex="2"]`)?.children[columnIndex]?.querySelector('.ag-floating-filter-input');
-        if (!filterInput) return false;
-        if (filterInput.value === value) return true;
+        if (!filterInput || filterInput.value === value) return !!filterInput;
 
         filterInput.value = value;
         filterInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -454,6 +397,7 @@
         if (state.isApplyingFilters) return true;
         const now = Date.now();
         if (now - state.lastFilterApplication < 1000) return true;
+        
         state.isApplyingFilters = true;
         state.lastFilterApplication = now;
         try {
@@ -461,7 +405,7 @@
             if (Object.keys(savedFilters).length === 0) return true;
             for (const [columnName, value] of Object.entries(savedFilters)) {
                 setColumnFilter(columnName, value, false);
-                await new Promise(r => setTimeout(r, 250));
+                await new Promise(r => setTimeout(r, 200));
             }
             return true;
         } finally {
@@ -474,7 +418,7 @@
         const success = await applySavedFilters();
         if (!success && state.filterRetryCount < state.maxFilterRetries) {
             state.filterRetryCount++;
-            setTimeout(() => applyFiltersWithRetry(), 1500);
+            setTimeout(applyFiltersWithRetry, 1500);
         }
     }
 
@@ -485,6 +429,7 @@
         if (!document.getElementById('mrn-display') || !document.getElementById('barcode-display-box') || document.getElementById('suite-location-display')) return;
         let locElement = document.querySelector('div.patient-info span[title*="UNIT/"]') || document.querySelector('div.patient-info span[title]');
         let location = null;
+        
         if (locElement) {
             const titleAttr = locElement.getAttribute('title');
             if (titleAttr && titleAttr.trim() !== '') {
@@ -497,7 +442,7 @@
         }
         if (location) {
             const locationDiv = document.createElement('div');
-            locationDiv.id = 'suite-location-display'; locationDiv.textContent = `${location}`;
+            locationDiv.id = 'suite-location-display'; locationDiv.textContent = location;
             Object.assign(locationDiv.style, { fontWeight: 'bold', fontSize: '18px', color: '#ffffff', backgroundColor: '#0000ff', borderRadius: '4px', padding: '4px 10px', marginLeft: '12px', display: 'flex', alignItems: 'center' });
             document.getElementById('mrn-display').after(locationDiv);
         }
@@ -538,87 +483,94 @@
     }
 
     //================================================================================
-    // LAYOUT REPAINT OPTIMIZED HIGH-SPEED CELLS HIGHLIGHTING
+    // LAYOUT REPAINT OPTIMIZED HIGH-SPEED CELLS HIGHLIGHTING (FastDOM Pattern)
     //================================================================================
-    function applyConditionalCellStyles(targetRows = null) {
-        const rows = targetRows || document.querySelectorAll('.ag-center-cols-container .ag-row');
+    function applyConditionalCellStyles() {
+        const rows = document.querySelectorAll('.ag-center-cols-container .ag-row');
         if (rows.length === 0) return;
 
-        rows.forEach(row => {
-            // Clinic check for EMERGENCY
+        // READ PHASE: Gather all required updates without modifying DOM to prevent Layout Thrashing
+        const updates = [];
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            let isEmergency = false;
+            let testClass = '';
+            let sampleClass = '';
+
             const clinicCell = row.querySelector('.ag-cell[col-id="clinic"]');
             if (clinicCell) {
-                const isEmergency = clinicCell.textContent.trim().toUpperCase() === 'EMERGENCY';
-                if (row.classList.contains('kaauh-row-emergency') !== isEmergency) {
-                    row.classList.toggle('kaauh-row-emergency', isEmergency);
-                }
+                isEmergency = clinicCell.textContent.trim().toUpperCase() === 'EMERGENCY';
             }
 
-            // Test Status Checks
             const testStatusCell = row.querySelector('.ag-cell[col-id="testStatus"]');
             if (testStatusCell) {
                 const text = testStatusCell.textContent.trim();
-                let newClass = '';
-
-                if (text === 'Resulted') newClass = 'kaauh-status-resulted';
-                else if (text === 'Ordered') newClass = 'kaauh-status-ordered';
-                else if (text.startsWith('VerifiedLevel')) newClass = 'kaauh-status-verified';
-
-                const currentClass = testStatusCell.dataset.kaauhCustomClass || '';
-                if (currentClass !== newClass) {
-                    if (currentClass) testStatusCell.classList.remove(currentClass);
-                    if (newClass) testStatusCell.classList.add(newClass);
-                    testStatusCell.dataset.kaauhCustomClass = newClass;
-                }
+                if (text === 'Resulted') testClass = 'kaauh-status-resulted';
+                else if (text === 'Ordered') testClass = 'kaauh-status-ordered';
+                else if (text.startsWith('VerifiedLevel')) testClass = 'kaauh-status-verified';
             }
 
-            // Sample Status Checks
             const sampleStatusCell = row.querySelector('.ag-cell[col-id="sampleStatus"]');
             if (sampleStatusCell) {
                 const text = sampleStatusCell.textContent.trim();
-                let newClass = '';
-
-                if (text === 'Received') newClass = 'kaauh-sample-received';
-                else if (text === 'Rejected') newClass = 'kaauh-sample-rejected';
-                else if (text === 'Collected') newClass = 'kaauh-sample-collected';
-
-                const currentClass = sampleStatusCell.dataset.kaauhCustomClass || '';
-                if (currentClass !== newClass) {
-                    if (currentClass) sampleStatusCell.classList.remove(currentClass);
-                    if (newClass) sampleStatusCell.classList.add(newClass);
-                    sampleStatusCell.dataset.kaauhCustomClass = newClass;
-                }
+                if (text === 'Received') sampleClass = 'kaauh-sample-received';
+                else if (text === 'Rejected') sampleClass = 'kaauh-sample-rejected';
+                else if (text === 'Collected') sampleClass = 'kaauh-sample-collected';
             }
-        });
+
+            updates.push({
+                row, isEmergency,
+                testStatusCell, testClass, testCurrentClass: testStatusCell ? (testStatusCell.dataset.kaauhCustomClass || '') : '',
+                sampleStatusCell, sampleClass, sampleCurrentClass: sampleStatusCell ? (sampleStatusCell.dataset.kaauhCustomClass || '') : ''
+            });
+        }
+
+        // WRITE PHASE: Apply all layout changes in one batched pass
+        for (let i = 0; i < updates.length; i++) {
+            const u = updates[i];
+
+            if (u.row.classList.contains('kaauh-row-emergency') !== u.isEmergency) {
+                u.row.classList.toggle('kaauh-row-emergency', u.isEmergency);
+            }
+
+            if (u.testStatusCell && u.testCurrentClass !== u.testClass) {
+                if (u.testCurrentClass) u.testStatusCell.classList.remove(u.testCurrentClass);
+                if (u.testClass) u.testStatusCell.classList.add(u.testClass);
+                u.testStatusCell.dataset.kaauhCustomClass = u.testClass;
+            }
+
+            if (u.sampleStatusCell && u.sampleCurrentClass !== u.sampleClass) {
+                if (u.sampleCurrentClass) u.sampleStatusCell.classList.remove(u.sampleCurrentClass);
+                if (u.sampleClass) u.sampleStatusCell.classList.add(u.sampleClass);
+                u.sampleStatusCell.dataset.kaauhCustomClass = u.sampleClass;
+            }
+        }
     }
 
+    function setupGridScrollListener() {
+        const gridViewport = document.querySelector(SELECTORS.agBodyViewport);
+        if (!gridViewport) { state.scrollListenerAttached = false; return; }
+        if (state.scrollListenerAttached) return;
+
+        gridViewport.addEventListener('scroll', () => { requestAnimationFrame(applyConditionalCellStyles); }, { passive: true });
+        state.scrollListenerAttached = true;
+    }
+
+    // Debounced observer directly tied to Animation Frames to ensure fluid UI rendering
     function watchGridForChanges() {
         const gridContainer = document.querySelector('.ag-center-cols-container');
-        if (!gridContainer || state.gridObserverActive) return;
+        if (!gridContainer) { state.gridObserverActive = false; return; }
+        if (state.gridObserverActive) return;
 
-        let pendingFrame = null;
-        let accumulatedRows = new Set();
-
-        const gridObserver = new MutationObserver((mutations) => {
-            for (const mutation of mutations) {
-                if (mutation.type === 'childList') {
-                    mutation.addedNodes.forEach(node => {
-                        if (node.nodeType === 1 && node.classList.contains('ag-row')) {
-                            accumulatedRows.add(node);
-                        }
-                    });
-                }
-            }
-
-            if (accumulatedRows.size > 0 && !pendingFrame) {
-                pendingFrame = requestAnimationFrame(() => {
-                    applyConditionalCellStyles(Array.from(accumulatedRows));
-                    accumulatedRows.clear();
-                    pendingFrame = null;
-                });
-            }
+        const gridObserver = new MutationObserver(() => {
+            if (state.gridUpdatePending) return;
+            state.gridUpdatePending = true;
+            requestAnimationFrame(() => {
+                applyConditionalCellStyles();
+                state.gridUpdatePending = false;
+            });
         });
-
+        
         gridObserver.observe(gridContainer, { childList: true, subtree: true });
         state.gridObserverActive = true;
     }
@@ -628,13 +580,7 @@
     //================================================================================
     function updateButtonSelection(selectedId) {
         state.selectedWorkbenchId = selectedId;
-        state.cachedButtons.forEach(btn => {
-            if (btn.dataset.workbenchId === selectedId) {
-                if (!btn.classList.contains('selected')) btn.classList.add('selected');
-            } else {
-                if (btn.classList.contains('selected')) btn.classList.remove('selected');
-            }
-        });
+        state.cachedButtons.forEach(btn => btn.classList.toggle('selected', btn.dataset.workbenchId === selectedId));
     }
 
     function insertFilterButtons() {
@@ -656,8 +602,8 @@
 
         const group = document.createElement('div');
         group.className = 'filter-btn-group';
-
         const fragment = document.createDocumentFragment();
+        
         let colorIndex = 0;
         state.cachedButtons = [];
 
@@ -665,13 +611,14 @@
             const btn = document.createElement('button');
             btn.className = `btn btn-color-${colorIndex++ % 20}`;
             btn.dataset.workbenchId = id;
+            
             const sessionKey = `workbench_status_${id || 'all'}`;
             let currentStatus = sessionStorage.getItem(sessionKey) || 'Ordered';
             btn.textContent = `${name} (${currentStatus})`;
-
-            if (select.value === id) {
-                btn.classList.add('selected');
-                state.selectedWorkbenchId = id;
+            
+            if (select.value === id) { 
+                btn.classList.add('selected'); 
+                state.selectedWorkbenchId = id; 
             }
 
             btn.addEventListener('click', async () => {
@@ -691,11 +638,11 @@
                     if (optToSelect) await setAndVerifyDropdown(statusDropdown, optToSelect.value, 'Status');
                 }
             });
-
+            
             state.cachedButtons.push(btn);
             fragment.appendChild(btn);
         }
-
+        
         group.appendChild(fragment);
         target.parentNode.insertBefore(group, target.nextSibling);
         if (!state.selectedWorkbenchId && select.value) updateButtonSelection(select.value);
@@ -709,10 +656,10 @@
             try {
                 const selectedOption = event.target.options[event.target.selectedIndex];
                 const selectedText = selectedOption.textContent.trim();
+                
                 if (selectedOption.value === '0' || selectedText.toLowerCase().includes('select')) {
                     if (state.isProcessingReset) return;
-                    const rbtn = document.querySelector('.relocated-reset-button');
-                    if (rbtn) rbtn.click();
+                    document.querySelector('.relocated-reset-button')?.click();
                     return;
                 }
                 setTimeout(async () => {
@@ -737,9 +684,10 @@
 
         const container = document.createElement('div');
         container.className = 'reset-button-container';
+        
         const relocatedResetButton = resetButton.cloneNode(true);
         relocatedResetButton.classList.add('relocated-reset-button');
-
+        
         referenceLabToggle.parentNode.insertBefore(container, referenceLabToggle);
         container.appendChild(relocatedResetButton);
         container.appendChild(referenceLabToggle);
@@ -765,13 +713,14 @@
     }
 
     document.addEventListener('keydown', (e) => {
-        if (document.activeElement && document.activeElement.id === 'barcode-popup-input') return;
+        if (document.activeElement?.id === 'barcode-popup-input') return;
         if (e.key === 'Delete') clearAllFiltersShallow();
     });
 
     function findFilterInputByHeader(headerText) {
         const headerViewport = document.querySelector(SELECTORS.agHeaderViewport);
         if (!headerViewport) return null;
+        
         const allTitleCells = Array.from(headerViewport.querySelectorAll('.ag-header-row[aria-rowindex="1"] .ag-header-cell'));
         let targetCell = allTitleCells.find(cell => cell.querySelector('.ag-header-cell-text')?.textContent?.trim().toLowerCase() === headerText.toLowerCase());
         if (!targetCell) return null;
@@ -793,8 +742,11 @@
         popupContainer = document.createElement('div'); popupContainer.id = 'barcode-popup-container';
         const popupBox = document.createElement('div'); popupBox.className = 'barcode-popup-box';
 
-        if (position && position.top && position.left) { popupBox.style.top = position.top; popupBox.style.left = position.left; }
-        else { popupBox.style.top = '50%'; popupBox.style.left = '50%'; popupBox.style.transform = 'translate(-50%, -50%)'; }
+        if (position?.top && position?.left) { 
+            popupBox.style.top = position.top; popupBox.style.left = position.left; 
+        } else { 
+            popupBox.style.top = '50%'; popupBox.style.left = '50%'; popupBox.style.transform = 'translate(-50%, -50%)'; 
+        }
 
         const popupHeader = document.createElement('div'); popupHeader.className = 'barcode-popup-header';
         const popupTitle = document.createElement('h3'); popupTitle.className = 'barcode-popup-title'; popupTitle.textContent = 'Quick Entry - Barcode / MRN';
@@ -813,7 +765,8 @@
         closeButton.addEventListener('click', () => { popupContainer.style.display = 'none'; });
         buttonContainer.appendChild(closeButton);
 
-        popupBox.appendChild(popupHeader); popupBox.appendChild(inputWrapper); popupBox.appendChild(buttonContainer); popupContainer.appendChild(popupBox);
+        popupBox.append(popupHeader, inputWrapper, buttonContainer);
+        popupContainer.appendChild(popupBox);
         document.body.appendChild(popupContainer);
 
         popupHeader.addEventListener('mousedown', (e) => {
@@ -823,14 +776,17 @@
                 popupBox.style.left = rect.left + 'px'; popupBox.style.top = rect.top + 'px'; popupBox.style.transform = 'none';
             }
             const initLeft = popupBox.offsetLeft, initTop = popupBox.offsetTop, startX = e.clientX, startY = e.clientY;
+            
             const onMouseMove = (mEvent) => {
                 popupBox.style.left = (initLeft + (mEvent.clientX - startX)) + 'px';
                 popupBox.style.top = (initTop + (mEvent.clientY - startY)) + 'px';
             };
+            
             const onMouseUp = async () => {
                 document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp);
                 await GM_setValue(BARCODE_POPUP_POSITION_KEY, JSON.stringify({ top: popupBox.style.top, left: popupBox.style.left }));
             };
+            
             document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
         });
 
@@ -866,21 +822,18 @@
         const popup = await createBarcodePopup();
         const buttonWrapper = document.createElement('div'); buttonWrapper.id = 'entry-buttons-wrapper'; buttonWrapper.className = 'entry-button-wrapper';
 
-        const barcodeButton = document.createElement('button'); barcodeButton.id = 'barcode-entry-btn'; barcodeButton.textContent = 'Barcode Entry';
-        Object.assign(barcodeButton.style, { backgroundColor: '#11800b', padding: '6px 12px', fontSize: '13px', fontWeight: 'bold', borderRadius: '6px', color: '#ffffff', border: '1px solid #285e79', cursor: 'pointer' });
-        barcodeButton.addEventListener('click', async () => {
-            await GM_setValue(POPUP_MODE_KEY, 'BARCODE'); await performFullReset();
-            popup.style.display = 'block'; document.getElementById('barcode-popup-input').focus();
-        });
+        const createEntryBtn = (id, text, color, mode) => {
+            const btn = document.createElement('button'); btn.id = id; btn.textContent = text;
+            Object.assign(btn.style, { backgroundColor: color, padding: '6px 12px', fontSize: '13px', fontWeight: 'bold', borderRadius: '6px', color: '#ffffff', border: '1px solid rgba(0,0,0,0.2)', cursor: 'pointer' });
+            btn.addEventListener('click', async () => {
+                await GM_setValue(POPUP_MODE_KEY, mode); await performFullReset();
+                popup.style.display = 'block'; document.getElementById('barcode-popup-input').focus();
+            });
+            return btn;
+        };
 
-        const mrnButton = document.createElement('button'); mrnButton.id = 'mrn-entry-btn'; mrnButton.textContent = 'MRN Entry';
-        Object.assign(mrnButton.style, { backgroundColor: '#d19a02', padding: '6px 12px', fontSize: '13px', fontWeight: 'bold', borderRadius: '6px', color: '#ffffff', border: '1px solid #4a2d8a', cursor: 'pointer' });
-        mrnButton.addEventListener('click', async () => {
-            await GM_setValue(POPUP_MODE_KEY, 'MRN'); await performFullReset();
-            popup.style.display = 'block'; document.getElementById('barcode-popup-input').focus();
-        });
-
-        buttonWrapper.appendChild(barcodeButton); buttonWrapper.appendChild(mrnButton);
+        buttonWrapper.appendChild(createEntryBtn('barcode-entry-btn', 'Barcode Entry', '#11800b', 'BARCODE'));
+        buttonWrapper.appendChild(createEntryBtn('mrn-entry-btn', 'MRN Entry', '#d19a02', 'MRN'));
         container.appendChild(buttonWrapper);
     }
 
@@ -890,11 +843,9 @@
     function setupNavigationShortcut() {
         const link = document.querySelector('span.csi-menu-text[title="Lab Orders"]')?.closest('a');
         if (!link || link.dataset.shortcutAttached === 'true') return;
+        
         link.addEventListener('click', () => {
-            setTimeout(() => {
-                const tab = document.querySelector('a[href="lab-orders/lab-test-analyzer"]');
-                if (tab) tab.click();
-            }, 100);
+            setTimeout(() => { document.querySelector('a[href="lab-orders/lab-test-analyzer"]')?.click(); }, 100);
         });
         link.dataset.shortcutAttached = 'true';
     }
@@ -903,6 +854,7 @@
         const wbSelect = document.getElementById(SELECTORS.workbenchDropdown.substring(1));
         const statusDropdown = document.querySelector(SELECTORS.statusDropdownTrigger)?.closest('select');
         if (!wbSelect || !statusDropdown) return;
+        
         try {
             const saved = await GM_getValue(WORKBENCH_SELECTION_KEY, null);
             if (saved) {
@@ -918,35 +870,35 @@
         } catch (e) { console.error(e); }
     }
 
-    function tryInjectSidebarMenu() {
+   function tryInjectSidebarMenu() {
         const INJECT_ID = '__custom-lab-test-status';
-        if (document.getElementById(INJECT_ID)) {
-            document.getElementById(INJECT_ID).classList.toggle('active', window.location.hash.startsWith('#/lab-orders/lab-test-analyzer'));
+        const isLabTestRoute = window.location.hash.startsWith('#/lab-orders/lab-test-analyzer');
+        
+        const existing = document.getElementById(INJECT_ID);
+        if (existing) {
+            existing.classList.toggle('active', isLabTestRoute);
             return;
         }
+        
         const listMenu = document.querySelector('csi-list-menu > div');
         if (!listMenu) return;
 
-        const outer = document.createElement('div'), inner = document.createElement('div'), host = document.createElement('csi-main-menu');
-        const anchor = document.createElement('a'); anchor.id = INJECT_ID; anchor.href = '#/lab-orders/lab-test-analyzer'; anchor.setAttribute('routerlinkactive', 'active'); anchor.style.cssText = 'cursor:pointer;';
-
-        const iSpan = document.createElement('span'); iSpan.className = 'icon-holder csi-menu-icon';
-        const icon = document.createElement('i'); icon.className = 'nova-icon-scan'; iSpan.appendChild(icon);
-
-        const tWrap = document.createElement('div'); tWrap.className = 'csi-menu-text-wrapper';
-        const tSpan = document.createElement('span'); tSpan.className = 'csi-menu-text sidemenu-title'; tSpan.title = 'Lab Test Status'; tSpan.textContent = 'Lab Test Status';
-
-        tWrap.appendChild(tSpan); anchor.appendChild(iSpan); anchor.appendChild(tWrap);
-        host.appendChild(anchor); inner.appendChild(host); outer.appendChild(inner);
-
-        listMenu.prepend(outer);
-        anchor.classList.toggle('active', window.location.hash.startsWith('#/lab-orders/lab-test-analyzer'));
+        const html = `<div id="__custom-sidebar-wrapper">
+                        <div><csi-main-menu>
+                            <a id="${INJECT_ID}" href="#/lab-orders/lab-test-analyzer" routerlinkactive="active" style="cursor:pointer;" class="${isLabTestRoute ? 'active' : ''}">
+                                <span class="icon-holder csi-menu-icon"><i class="nova-icon-scan"></i></span>
+                                <div class="csi-menu-text-wrapper"><span class="csi-menu-text sidemenu-title" title="Lab Test Status">Lab Test Status</span></div>
+                            </a>
+                        </csi-main-menu></div>
+                      </div>`;
+                      
+        listMenu.insertAdjacentHTML('afterbegin', html);
     }
 
     //================================================================================
     // ARCHITECTURAL MASTER OBSERVER PIPELINE
     //================================================================================
-    async function masterObserverCallback() {
+    function masterObserverCallback() {
         if (state.observerThrottle) clearTimeout(state.observerThrottle);
         state.observerThrottle = setTimeout(async () => {
             if (location.href !== state.lastUrl) {
@@ -959,11 +911,11 @@
             addLocationToHeader();
 
             document.querySelectorAll('input[bsdaterangepicker]').forEach(upgradeInput);
-
             document.querySelectorAll('input[bsdaterangepicker][data-upgraded="true"]').forEach(input => {
                 if (typeof input.checkAndRollDate === 'function') input.checkAndRollDate();
             });
 
+            // Prevent heavy grid logic execution if not actively viewing the grid module
             if (!location.href.includes('lab-orders/lab-test-analyzer')) return;
 
             await enforcePaginationSize();
@@ -971,6 +923,7 @@
             ensureEntryButtonsExist();
             insertFilterButtons();
             addStatusDropdownListener();
+            setupGridScrollListener();
             watchGridForChanges();
             manageInfoPanelVisibility();
 
@@ -979,15 +932,64 @@
                 await applyFiltersWithRetry();
                 state.hasAppliedInitialFilters = true;
             }
-            // Catch any existing rows on initial load before the observer has caught mutations
+            
+            // Execute safe batch cell updates
             applyConditionalCellStyles();
         }, 100);
     }
+
+    //================================================================================
+    // BACKGROUND UPDATE CHECKER ENGINE
+    //================================================================================
+    function showUpdateNotification(newVersion) {
+        if (document.getElementById('kaauh-update-notification') || sessionStorage.getItem('kaauh_skip_update_notif') === String(newVersion)) return;
+        
+        const notif = document.createElement('div');
+        notif.id = 'kaauh-update-notification';
+        notif.innerHTML = `
+            <div style="font-weight:bold;margin-bottom:5px;font-size:15px;">🚀 Script Update Available!</div>
+            <div style="margin-bottom:8px;">Version <b>${newVersion}</b> was found on the network.</div>
+            <div style="font-size:12px;margin-bottom:10px;opacity:0.9;">Please click "Check for updates" in your extension menu to install.</div>
+            <button id="kaauh-update-dismiss" style="width:100%;padding:6px;background:#fff;color:#d35400;border:none;border-radius:4px;font-weight:bold;cursor:pointer;">Dismiss</button>
+        `;
+        Object.assign(notif.style, {
+            position: 'fixed', bottom: '25px', right: '25px', backgroundColor: '#d35400', color: 'white',
+            padding: '18px', borderRadius: '8px', boxShadow: '0 8px 20px rgba(0,0,0,0.4)', zIndex: '10001',
+            fontFamily: 'sans-serif', fontSize: '13px', width: '280px', transition: 'all 0.3s ease'
+        });
+        
+        document.body.appendChild(notif);
+        document.getElementById('kaauh-update-dismiss').addEventListener('click', () => {
+            notif.remove();
+            sessionStorage.setItem('kaauh_skip_update_notif', String(newVersion));
+        });
+    }
+
+    function checkForUpdates() {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: SCRIPT_UPDATE_URL,
+            onload: function(response) {
+                if (response.status === 200 || response.status === 0) {
+                    const match = response.responseText.match(/@version\s+([\d\.]+)/);
+                    if (match && match[1]) {
+                        const remoteVersion = parseFloat(match[1]);
+                        if (remoteVersion > CURRENT_VERSION) showUpdateNotification(remoteVersion);
+                    }
+                }
+            },
+            onerror: function(err) {
+                console.warn('[Update Engine] Network path check failed.', err);
+            }
+        });
+    }
+
+    setTimeout(checkForUpdates, 5000);
+    setInterval(checkForUpdates, 60000);
 
     const observer = new MutationObserver(masterObserverCallback);
     observer.observe(document.body, { childList: true, subtree: true });
     masterObserverCallback();
 
-    window.addEventListener('hashchange', () => { tryInjectSidebarMenu(); });
-    console.log(`KAAUH Lab Script v${scriptVersion} fully loaded!`);
+    window.addEventListener('hashchange', tryInjectSidebarMenu);
 })();
