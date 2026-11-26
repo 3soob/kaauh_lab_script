@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Unified Lab Assistant & Receiver plus
-// @version      38.0
-// @description  v30.11.5: Stabilized sticky barcode display box across Angular re-renders, iframe transitions, and 3-Pane selection, plus all v30.11.3 features.
+// @version      30.11.10
+// @description  v30.11.10: Shows patient location + telephone extensions (or "Not Available") exclusively inside the sticky barcode display box, plus all v30.11.6 features.
 // @match        https://his.kaauh.org/lab/*
 // @author       Hamad AlShegifi
 // @namespace    http://tampermonkey.net/
@@ -314,7 +314,7 @@
     // BROWSER-ONLY DIRECTORY SYNC (File System Access API + IndexedDB)
     // =====================================================================
     let cachedDirHandle = null;
-    let syncPermissionState = 'unlinked'; // 'unlinked' | 'prompt' | 'granted'
+    let syncPermissionState = 'unlinked';
     let syncInProgress = false;
     let syncIntervalId = null;
 
@@ -601,7 +601,6 @@
         }
     }
 
-    // Fast, READ-ONLY synchronous snapshot of the table (taken on Save click, before Angular clears it)
     function captureTableSaveSnapshot() {
         const staffName = getStaffNameFromPage();
         const tbody = document.querySelector('tbody[formarrayname="TubeTypeList"]');
@@ -668,7 +667,6 @@
         };
     }
 
-    // Returns true only when new stats were actually credited
     function countAndCreditFromSnapshot(snapshot) {
         checkAndResetShift();
         if (!snapshot || !snapshot.staffName) return false;
@@ -689,7 +687,6 @@
             return false;
         }
 
-        // Use the live counter (after the save) to track the delta; fall back to the snapshot value
         const liveSamples = getSamplesCountFromPage();
         const samplesNow = liveSamples !== null ? liveSamples : currentSamples;
         let domDelta = 0;
@@ -1038,7 +1035,7 @@
         #custom-detail-toggle-btn { font-weight: bold !important; border-radius: 4px !important; padding: 4px 14px !important; font-size: 12px !important; height: auto !important; vertical-align: middle !important; border: none !important; cursor: pointer !important; display: inline-block !important; margin-right: 8px !important; box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important; transition: all 0.2s ease-in-out !important; text-transform: uppercase !important; letter-spacing: 0.3px !important; } #custom-detail-toggle-btn:hover { transform: translateY(-1px) !important; filter: brightness(1.1) !important; }
     `);
 
-// ===== One-line barcode display box (High-Contrast Off-White Theme - Large Text) =====
+    // ===== One-line barcode display box (High-Contrast Off-White Theme - Large Text) =====
     GM_addStyle(`
         #barcode-display-box {
             display: flex !important;
@@ -1114,7 +1111,7 @@
             white-space: nowrap !important;
             flex: 0 1 auto !important;
             min-width: 0 !important;
-            max-width: 360px !important;
+            max-width: 480px !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
         }
@@ -1124,26 +1121,26 @@
             padding: 0 !important;
         }
         #suite-location-display .location-telephone-chip {
-            font-size: 15px !important;
+            font-size: 15.5px !important;
             border-radius: 6px !important;
-            border: 1.5px solid #b91c1c !important;
+            border: 2px solid #b91c1c !important;
             box-shadow: none !important;
         }
         #suite-location-display .loc-text {
-            padding: 3px 10px !important;
-            background: #dc2626 !important;
+            padding: 2px 10px !important;
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
             color: #ffffff !important;
             font-weight: 800 !important;
         }
         #suite-location-display .loc-tel {
-            padding: 3px 10px !important;
-            gap: 5px !important;
-            background: #ffffff !important;
+            padding: 2px 11px !important;
+            gap: 6px !important;
+            background: #fef3c7 !important;
             color: #0f172a !important;
-            border-left: 1.5px solid #cbd5e1 !important;
+            border-left: 2px solid #d97706 !important;
         }
         #suite-location-display .loc-tel::before {
-            font-size: 15px !important;
+            font-size: 15.5px !important;
             color: #b45309 !important;
         }
         #suite-location-display .tel-numbers {
@@ -1156,7 +1153,6 @@
     const fireEvent = (element, eventType) => element.dispatchEvent(new Event(eventType, { bubbles: true }));
     const debounce = (func, wait) => { let timeout; return function(...args) { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), wait); }; };
 
-    // FIXED: entities written with \x26 so they can't be decoded/mangled when copied
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({
         '&': '\x26amp;',
         '<': '\x26lt;',
@@ -1851,6 +1847,7 @@
             if (mrnSvg) mrnSvg.remove();
             if (spacer) spacer.remove();
         }
+        syncPatientBannerLocation();
     }
 
     function updatePatientTypeBadge() {
@@ -1897,7 +1894,7 @@
         document.querySelectorAll('h6[translateid="test-results.Results"]').forEach(el => el.remove());
         const detailTop = document.querySelector('.lo-view-detail-top'); if (detailTop) detailTop.style.display = (localStorage.getItem('labDetailTopVisibility') || 'show') === 'hide' ? 'none' : '';
         setupPatientDetailToggle(); applyPersistentRowStyles();
-        displayMrn(); updateSummaryPosition(); updatePatientTypeBadge(); setupMenuNavigationObserver(); initColumnToggle();
+        displayMrn(); scanAllLocationElements(); updateSummaryPosition(); updatePatientTypeBadge(); setupMenuNavigationObserver(); initColumnToggle();
     }, 100);
 
     // STICKY BARCODE (Stabilized — persists across Angular re-renders & iframe transitions)
@@ -1960,7 +1957,6 @@
 
         let box = document.getElementById('barcode-display-box');
         if (box) {
-            // Ensure it stays mounted right after target even if Angular re-renders the button bar
             if (document.body.contains(box) && target.nextElementSibling === box) {
                 renderBarcodeGraphic(barcode);
                 displayMrn();
@@ -2096,23 +2092,189 @@
         }
     }
 
-    // TELEPHONE EXTENSIONS
-    const WARD_EXTENSIONS = { 'CARDIAC CARE CENTER': ['12600', '11648'], 'CARDIAC CARE UNIT': ['12600', '11648'], 'CARDIAC CENTER': ['12600', '11648'], 'CARDIC CENTRE': ['12600', '11648'], 'CARDIC CARE CENTER': ['12600', '11648'], 'CCU': ['12600', '11648'], 'CC': ['12600', '11648'], 'FEMALE MEDICAL UNIT': ['13114'], 'FEMALE MEDICAL': ['13114'], 'FM': ['13114'], 'MALE MEDICAL UNIT': ['13014', '13774', '13616'], 'MALE MEDICAL': ['13014', '13774', '13616'], 'MM': ['13014', '13774', '13616'], 'MALE SURGICAL UNIT': ['15613', '15600', '15007', '15614', '15615'], 'MALE SURGICAL': ['15613', '15600', '15007', '15614', '15615'], 'MS': ['15613', '15600', '15007', '15614', '15615'], 'FEMALE SURGICAL UNIT': ['15113', '15114', '15115'], 'FEMALE SURGICAL': ['15113', '15114', '15115'], 'FS': ['15113', '15114', '15115'], 'LABOR AND DELIVERY': ['11722', '11723'], 'LABOR & DELIVERY': ['11722', '11723'], 'L & D': ['11722', '11723'], 'L&D': ['11722', '11723'], 'DAY CARE UNIT ONCOLOGY HEMATOLOGY': ['14107', '14116', '14106', '14310'], 'DCUOH': ['14107', '14116', '14106', '14310'], 'DAY CARE UNIT': ['14107', '14116', '14106', '14310'], 'DCU': ['14107', '14116', '14106', '14310'], 'DIALYSIS': ['10319', '12146', '12401'], 'DUTY MANAGER': ['17179'], 'ENDOSCOPY': ['10228', '10221'], 'ENDO': ['10228', '10221'], 'EMERGENCY ROOM UNIT': ['10999', '18331', '10342', '10552', '10415', '10557', '10435'], 'Emergency Department (ED)': ['10999', '18331', '10342', '10552', '10415', '10557', '10435'], 'EMERGENCY ROOM': ['10999', '18331', '10342', '10552', '10415', '10557', '10435'], 'ER UNIT': ['10999', '18331', '10342', '10552', '10415', '10557', '10435'], 'ER': ['10999', '18331', '10342', '10552', '10415', '10557', '10435'], 'ED': ['10999', '18331', '10342', '10552', '10415', '10557', '10435'], 'HEMATOLOGY CLINIC': ['11411', '11410'], 'HEMA CLINIC': ['11411', '11410'], 'INFECTIOUS DISEASE ISOLATION': ['12401', '12402'], 'IDIA': ['12401', '12402'], 'INPATIENT ONC.HEMA.': ['10652', '10360'], 'INSTITUTE OF OPHTHALMOLOGY': ['10652', '10360'], 'IOH IN': ['10652', '10360'], 'IOH': ['10652', '10360'], 'ISOLATION UNIT': ['14302', '14303'], 'ISOLATION': ['14302', '14303'], 'ISO': ['14302', '14303'], 'MEDICAL INTENSIVE CARE UNIT': ['12807', '12802', '12801'], 'MICU': ['12807', '12802', '12801'], 'SURGICAL INTENSIVE CARE UNIT': ['10258', '10288', '10277', '18422'], 'SICU': ['10258', '10288', '10277', '18422'], 'NEONATAL INTENSIVE CARE UNIT': ['11840'], 'NICU': ['11840'], 'PEDIATRIC CARDIAC INTENSIVE CARE UNIT': ['10547', '10549'], 'PEDIATRIC CARDIAC ICU': ['10547', '10549'], 'PCICU': ['10547', '10549'], 'PEDIATRIC INTENSIVE CARE UNIT 2': ['13352', '13355'], 'PICU 2': ['13352', '13355'], 'PEDIATRIC INTENSIVE CARE UNIT': ['12814', '12815'], 'PICU': ['12814', '12815'], 'SURGICAL INTERMEDIATE CARE UNIT': ['15115'], 'SIMCU': ['15115'], 'NEWBORN NURSERY': ['11220', '11767', '11724'], 'NURSERY': ['11220', '11767', '11724'], 'NN': ['11220', '11767', '11724'], 'OBSTETRICS': ['11734', '11114', '11116'], 'OB': ['11734', '11114', '11116'], 'PEDIATRIC DAY CARE UNIT': ['11764'], 'PED DAY CARE': ['11764'], 'DAY CARE (PEDIATRIC UNIT)': ['11764'], 'PEDIATRIC EMERGENCY ROOM': ['10412'], 'PEDIATRIC ER': ['10412'], 'PED ER': ['10412'], 'PEDIATRIC HEMATOLOGY ONCOLOGY': ['12615'], 'PED HEMA ONC': ['12615'], 'POST MEDICAL 1': ['11613', '17164', '11612', '10288', '11761'], 'PM 1': ['11613', '17164', '11612', '10288', '11761'], 'PEDIATRIC UNIT 1': ['11613', '17164', '11612', '10288', '11761'], 'POST MEDICAL 2': ['12616', '12618', '12605'], 'PM 2': ['12616', '12618', '12605'], 'PEDIATRIC UNIT 2': ['12616', '12618', '12605'], 'PRIVATE WARD 1': ['11763', '12012', '12011', '12015'], 'PRIVATE': ['11763', '12012', '12011', '12015'], 'PVT1': ['11763', '12012', '12011', '12015'], 'PATIENT CARE SUPPORT SERVICES': ['10538'], 'PCSS': ['10538'], 'STAFF HEALTH SERVICES': ['10016', '10017'], 'STAFF HEALTH': ['10016', '10017'], 'STAT LABORATORY': ['10427'], 'STAFF LAB': ['10427'] };
-    GM_addStyle(`.location-telephone-chip { display: inline-flex; align-items: center; border-radius: 12px; overflow: hidden; font-size: 16px; font-weight: 600; box-shadow: 0 2px 8px rgba(0, 123, 255, 0.25); border: 1px solid rgba(0, 123, 255, 0.2); cursor: default; } .loc-text { padding: 8px 16px; background: linear-gradient(135deg, #0062cc 0%, #004a99 50%, #003875 100%); color: #ffffff; font-weight: 700; } .loc-tel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); color: #2c3e50; border-left: 2px solid rgba(0, 123, 255, 0.3); } .loc-tel::before { content: '☎'; color: #007bff; font-size: 16px; } .tel-numbers { font-family: sans-serif; font-weight: 700; color: #1a1a1a; }`);
+    // ============================================
+    // TELEPHONE EXTENSION OVERLAY MODULE (Integrated & Theme-Matched)
+    // ============================================
+    const WARD_EXTENSIONS = {
+        'CARDIAC CARE CENTER': ['12600', '11648'], 'CARDIAC CARE UNIT': ['12600', '11648'], 'CARDIAC CENTER': ['12600', '11648'], 'CARDIC CENTRE': ['12600', '11648'], 'CARDIC CARE CENTER': ['12600', '11648'], 'CCU': ['12600', '11648'], 'CC': ['12600', '11648'],
+        'FEMALE MEDICAL UNIT': ['13114'], 'FEMALE MEDICAL': ['13114'], 'FM': ['13114'],
+        'MALE MEDICAL UNIT': ['13014', '13774', '13616'], 'MALE MEDICAL': ['13014', '13774', '13616'], 'MM': ['13014', '13774', '13616'],
+        'MALE SURGICAL UNIT': ['15613', '15600', '15007', '15614', '15615'], 'MALE SURGICAL': ['15613', '15600', '15007', '15614', '15615'], 'MS': ['15613', '15600', '15007', '15614', '15615'],
+        'FEMALE SURGICAL UNIT': ['15113', '15114', '15115'], 'FEMALE SURGICAL': ['15113', '15114', '15115'], 'FS': ['15113', '15114', '15115'],
+        'LABOR AND DELIVERY': ['11722', '11723'], 'LABOR & DELIVERY': ['11722', '11723'], 'L & D': ['11722', '11723'], 'L&D': ['11722', '11723'],
+        'DAY CARE UNIT ONCOLOGY HEMATOLOGY': ['14107', '14116', '14106', '14310'], 'DCUOH': ['14107', '14116', '14106', '14310'], 'DAY CARE UNIT': ['14107', '14116', '14106', '14310'], 'DCU': ['14107', '14116', '14106', '14310'],
+        'DIALYSIS': ['10319', '12146', '12401'], 'DUTY MANAGER': ['17179'], 'ENDOSCOPY': ['10228', '10221'], 'ENDO': ['10228', '10221'],
+        'EMERGENCY ROOM UNIT': ['10999', '18331', '10342', '10552', '10415', '10557', '10435'], 'Emergency Department (ED)': ['10999', '18331', '10342', '10552', '10415', '10557', '10435'], 'EMERGENCY ROOM': ['10999', '18331', '10342', '10552', '10415', '10557', '10435'], 'ER UNIT': ['10999', '18331', '10342', '10552', '10415', '10557', '10435'], 'ER': ['10999', '18331', '10342', '10552', '10415', '10557', '10435'], 'ED': ['10999', '18331', '10342', '10552', '10415', '10557', '10435'],
+        'HEMATOLOGY CLINIC': ['11411', '11410'], 'HEMA CLINIC': ['11411', '11410'], 'INFECTIOUS DISEASE ISOLATION': ['12401', '12402'], 'IDIA': ['12401', '12402'],
+        'INPATIENT ONC.HEMA.': ['10652', '10360'], 'INSTITUTE OF OPHTHALMOLOGY': ['10652', '10360'], 'IOH IN': ['10652', '10360'], 'IOH': ['10652', '10360'],
+        'ISOLATION UNIT': ['14302', '14303'], 'ISOLATION': ['14302', '14303'], 'ISO': ['14302', '14303'],
+        'MEDICAL INTENSIVE CARE UNIT': ['12807', '12802', '12801'], 'MICU': ['12807', '12802', '12801'], 'SURGICAL INTENSIVE CARE UNIT': ['10258', '10288', '10277', '18422'], 'SICU': ['10258', '10288', '10277', '18422'],
+        'NEONATAL INTENSIVE CARE UNIT': ['11840'], 'NICU': ['11840'], 'PEDIATRIC CARDIAC INTENSIVE CARE UNIT': ['10547', '10549'], 'PEDIATRIC CARDIAC ICU': ['10547', '10549'], 'PCICU': ['10547', '10549'], 'PEDIATRIC INTENSIVE CARE UNIT 2': ['13352', '13355'], 'PICU 2': ['13352', '13355'], 'PEDIATRIC INTENSIVE CARE UNIT': ['12814', '12815'], 'PICU': ['12814', '12815'], 'SURGICAL INTERMEDIATE CARE UNIT': ['15115'], 'SIMCU': ['15115'],
+        'NEWBORN NURSERY': ['11220', '11767', '11724'], 'NURSERY': ['11220', '11767', '11724'], 'NN': ['11220', '11767', '11724'], 'OBSTETRICS': ['11734', '11114', '11116'], 'OB': ['11734', '11114', '11116'],
+        'PEDIATRIC DAY CARE UNIT': ['11764'], 'PED DAY CARE': ['11764'], 'DAY CARE (PEDIATRIC UNIT)': ['11764'], 'PEDIATRIC EMERGENCY ROOM': ['10412'], 'PEDIATRIC ER': ['10412'], 'PED ER': ['10412'], 'PEDIATRIC HEMATOLOGY ONCOLOGY': ['12615'], 'PED HEMA ONC': ['12615'],
+        'POST MEDICAL 1': ['11613', '17164', '11612', '10288', '11761'], 'PM 1': ['11613', '17164', '11612', '10288', '11761'], 'PEDIATRIC UNIT 1': ['11613', '17164', '11612', '10288', '11761'], 'POST MEDICAL 2': ['12616', '12618', '12605'], 'PM 2': ['12616', '12618', '12605'], 'PEDIATRIC UNIT 2': ['12616', '12618', '12605'],
+        'PRIVATE WARD 1': ['11763', '12012', '12011', '12015'], 'PRIVATE': ['11763', '12012', '12011', '12015'], 'PVT1': ['11763', '12012', '12011', '12015'],
+        'PATIENT CARE SUPPORT SERVICES': ['10538'], 'PCSS': ['10538'], 'STAFF HEALTH SERVICES': ['10016', '10017'], 'STAFF HEALTH': ['10016', '10017'], 'STAT LABORATORY': ['10427'], 'STAFF LAB': ['10427']
+    };
+
+    GM_addStyle(`
+        .location-telephone-chip {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 6px;
+            overflow: hidden;
+            font-size: 13.5px;
+            font-weight: 700;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+            border: 1.5px solid #b91c1c;
+            cursor: default;
+            vertical-align: middle;
+            line-height: 1.25;
+        }
+        .loc-text {
+            padding: 3px 10px;
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            color: #ffffff;
+            font-weight: 800;
+        }
+        .loc-tel {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            background: #f8fafc;
+            color: #0f172a;
+            border-left: 1.5px solid #cbd5e1;
+        }
+        .loc-tel::before {
+            content: '☎';
+            color: #b45309;
+            font-size: 14px;
+        }
+        .tel-numbers {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-weight: 900;
+            color: #000000;
+        }
+        .ag-cell .location-telephone-chip {
+            font-size: 12px;
+            border-radius: 5px;
+            box-shadow: none;
+        }
+        .ag-cell .loc-text, .ag-cell .loc-tel {
+            padding: 1px 7px;
+        }
+    `);
+
     function getExtensionsForLocation(location) {
-        if (!location) return null; const normalized = location.toUpperCase().trim().split('/')[0].trim(); const abbrevMatch = normalized.match(/\(([^)]+)\)/);
-        if (abbrevMatch && WARD_EXTENSIONS[abbrevMatch[1].trim()]) return WARD_EXTENSIONS[abbrevMatch[1].trim()]; if (WARD_EXTENSIONS[normalized]) return WARD_EXTENSIONS[normalized];
-        const sortedKeys = Object.keys(WARD_EXTENSIONS).sort((a, b) => b.length - a.length); for (const ward of sortedKeys) { if (normalized.includes(ward)) return WARD_EXTENSIONS[ward]; } return null;
+        if (!location) return null;
+        const normalized = location.toUpperCase().trim().split('/')[0].trim();
+        const abbrevMatch = normalized.match(/\(([^)]+)\)/);
+        if (abbrevMatch && WARD_EXTENSIONS[abbrevMatch[1].trim()]) return WARD_EXTENSIONS[abbrevMatch[1].trim()];
+        if (WARD_EXTENSIONS[normalized]) return WARD_EXTENSIONS[normalized];
+
+        const sortedKeys = Object.keys(WARD_EXTENSIONS).sort((a, b) => b.length - a.length);
+        for (const ward of sortedKeys) {
+            if (normalized.includes(ward)) return WARD_EXTENSIONS[ward];
+        }
+        return null;
     }
+
+    function createUnifiedChip(locationText, extensions) {
+        if (!locationText) locationText = 'Location';
+        const hasExtensions = Array.isArray(extensions) && extensions.length > 0;
+        const extensionList = hasExtensions ? extensions.join(', ') : 'Not Available';
+        const titleText = hasExtensions
+            ? `${locationText} — Extension(s): ${extensionList}`
+            : `${locationText} — Extension Not Available`;
+
+        const chip = document.createElement('span');
+        chip.className = 'location-telephone-chip';
+        chip.innerHTML = `
+            <span class="loc-text">${esc(locationText)}</span>
+            <span class="loc-tel" title="${esc(titleText)}">
+                <span class="tel-numbers" style="${hasExtensions ? '' : 'color:#64748b !important;'}">${esc(extensionList)}</span>
+            </span>`;
+        return chip;
+    }
+
     function enhanceLocationWithTelephone(element) {
-        if (!element) return; let text = ""; element.childNodes.forEach(n => { if (n.nodeType === 3) text += n.textContent; }); text = text.trim();
-        if (!text || element.dataset.processedLocation === text) return; element.dataset.processedLocation = text;
-        const exts = getExtensionsForLocation(text);
-        if (exts) {
-            element.childNodes.forEach(n => { if (n.nodeType === 3) n.remove(); }); element.querySelectorAll('.location-telephone-chip, .location-telephone').forEach(c => c.remove()); element.style.cssText = "background:none; border:none; padding:0; margin:0; box-shadow:none; display:inline-block;";
-            const chip = document.createElement('span'); chip.className = 'location-telephone-chip'; chip.innerHTML = `<span class="loc-text">${esc(text)}</span><span class="loc-tel" title="Extension(s): ${exts.join(', ')}"><span class="tel-numbers">${exts.join(', ')}</span></span>`;
+        if (!element || element.id !== 'suite-location-display') return;
+        let text = '';
+        element.childNodes.forEach(n => { if (n.nodeType === 3) text += n.textContent; });
+        text = text.trim();
+
+        if (!text && !element.querySelector('.location-telephone-chip')) {
+            text = element.textContent.trim();
+        }
+        if (!text || element.dataset.processedLocation === text) return;
+        element.dataset.processedLocation = text;
+
+        const extensions = getExtensionsForLocation(text);
+
+        element.childNodes.forEach(n => { if (n.nodeType === 3) n.remove(); });
+        element.querySelectorAll('.location-telephone-chip, .location-telephone').forEach(c => c.remove());
+
+        const chip = createUnifiedChip(text, extensions);
+        if (chip) {
+            element.style.display = '';
             element.appendChild(chip);
         }
+    }
+
+    function extractCurrentUnitLocation() {
+        const labelTd = document.querySelector('td[translateid="patient-detail.Location"], td[translateid="patient-detail.Ward"], td[translateid="patient-detail.Unit"]');
+        if (labelTd?.nextElementSibling) {
+            const raw = labelTd.nextElementSibling.textContent.trim();
+            if (raw && raw !== '--' && raw !== '-') return raw;
+        }
+        const pc = document.querySelector('.patient-profile');
+        if (pc) {
+            const locNode = pc.querySelector('.patient-location, [translateid*="Location"] + td, [translateid*="Ward"] + td');
+            if (locNode) {
+                const raw = locNode.textContent.trim();
+                if (raw && raw !== '--' && raw !== '-') return raw;
+            }
+            for (const div of pc.querySelectorAll('.mid')) {
+                const label = div.querySelector('h6')?.textContent.trim().toUpperCase() || '';
+                if (label.includes('LOCATION') || label.includes('WARD') || label.includes('UNIT')) {
+                    const raw = (div.querySelector('span')?.textContent || '').trim();
+                    if (raw && raw !== '--' && raw !== '-') return raw;
+                }
+            }
+        }
+        return '';
+    }
+
+    function syncPatientBannerLocation() {
+        const box = document.getElementById('barcode-display-box');
+        if (!box) return;
+        const unitText = extractCurrentUnitLocation();
+        let locEl = document.getElementById('suite-location-display');
+
+        if (!unitText) {
+            if (locEl) locEl.remove();
+            return;
+        }
+
+        if (!locEl) {
+            locEl = document.createElement('div');
+            locEl.id = 'suite-location-display';
+            box.appendChild(locEl);
+        }
+
+        if (locEl.dataset.processedLocation !== unitText) {
+            delete locEl.dataset.processedLocation;
+            locEl.innerHTML = '';
+            locEl.textContent = unitText;
+            enhanceLocationWithTelephone(locEl);
+        }
+    }
+
+    const LOCATION_WATCH_SELECTOR = 'td[translateid="patient-detail.Location"] + td, td[translateid="patient-detail.Ward"] + td, td[translateid="patient-detail.Unit"] + td, .patient-profile .patient-location, #suite-location-display';
+
+    function scanAllLocationElements() {
+        syncPatientBannerLocation();
     }
 
     // PAGINATION
@@ -2120,26 +2282,40 @@
     window.addEventListener('load', setDropdownValue);
 
     // MASTER MUTATION OBSERVER
-    const LOCATION_SELECTOR = '[col-id*="location"], [col-id*="Location"], .patient-location, .test-location, #suite-location-display';
     const masterObserver = new MutationObserver(mutations => {
         let touchedDisabled = false;
+        let locationChanged = false;
         for (const mutation of mutations) {
             if (mutation.type === 'attributes') { touchedDisabled = true; continue; }
+            if (mutation.type === 'characterData') {
+                if (mutation.target.parentElement?.closest?.(LOCATION_WATCH_SELECTOR)) {
+                    locationChanged = true;
+                }
+                continue;
+            }
             for (const node of mutation.addedNodes) {
+                if (node.nodeType === 3) {
+                    if (mutation.target?.closest?.(LOCATION_WATCH_SELECTOR)) {
+                        locationChanged = true;
+                    }
+                    continue;
+                }
                 if (node.nodeType !== 1) continue;
 
                 if (node.matches && node.matches('input')) { if (node.matches(RESULT_INPUT_SELECTOR)) removeNumericRestriction(node); }
                 else if (node.querySelectorAll) node.querySelectorAll(RESULT_INPUT_SELECTOR).forEach(removeNumericRestriction);
 
-                if (node.matches && node.matches(LOCATION_SELECTOR)) enhanceLocationWithTelephone(node);
-                else if (node.querySelectorAll) node.querySelectorAll(LOCATION_SELECTOR).forEach(enhanceLocationWithTelephone);
+                if ((node.matches && node.matches(LOCATION_WATCH_SELECTOR)) || (node.querySelectorAll && node.querySelectorAll(LOCATION_WATCH_SELECTOR).length > 0)) {
+                    locationChanged = true;
+                }
 
                 if (node.id === "dropdownPaginationPageSize") setDropdownValue();
             }
         }
+        if (locationChanged) syncPatientBannerLocation();
         if (touchedDisabled) enableModalSaveButton();
     });
-    masterObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+    masterObserver.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['disabled'] });
 
     // SAVE HOOK (staff counter + saved batches)
     const SAVE_BUTTON_SELECTOR = '#savebtn-smplrecieve';
@@ -2232,6 +2408,6 @@
     });
     spaObserver.observe(document.body, { childList: true, subtree: true });
 
-    setTimeout(() => { runAllUpdates(); initializeScript(); window.enhancedGrid.barcodeBoxUrlCheck?.(); manageSummaryTableLifecycle(); setDropdownValue(); }, 500);
+    setTimeout(() => { runAllUpdates(); initializeScript(); window.enhancedGrid.barcodeBoxUrlCheck?.(); manageSummaryTableLifecycle(); setDropdownValue(); scanAllLocationElements(); }, 500);
 
 })();
