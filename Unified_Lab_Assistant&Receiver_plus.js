@@ -1,6 +1,8 @@
 // ==UserScript==
 // @name         Unified Lab Assistant & Receiver plus
-// @version      30.11.10
+// @version      30.11.11
+// @updateURL    https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/Unified_Lab_Assistant%26Receiver_plus.js
+// @downloadURL  https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/Unified_Lab_Assistant%26Receiver_plus.js
 // @description  v30.11.10: Shows patient location + telephone extensions (or "Not Available") exclusively inside the sticky barcode display box, plus all v30.11.6 features.
 // @match        https://his.kaauh.org/lab/*
 // @author       Hamad AlShegifi
