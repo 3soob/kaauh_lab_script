@@ -1,22 +1,4 @@
-name: GreasyFork-Style Version Bump
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ['**/*.js']
-
-permissions:
-  contents: write
-
-jobs:
-  bump-version:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Bump @version and sync URLs across all repo scripts
+- name: Bump @version and sync URLs across all repo scripts
         run: |
           python3 -c '
           import os, re, urllib.parse
@@ -42,14 +24,19 @@ jobs:
                   encoded_path = urllib.parse.quote(rel_path)
                   raw_url = f"{repo_raw_base}/{encoded_path}"
 
+                  # 1. Bump @version if present, or add @version 1.0.0 if missing
                   def bump(match):
                       prefix, head, last = match.groups()
                       return f"{prefix}{head}{int(last) + 1}"
 
                   updated, count = re.subn(r"(//\s*@version\s+)([\d.]+\.)(\d+)", bump, content, count=1)
+                  if count == 0 and not re.search(r"//\s*@version\s+", updated):
+                      updated = re.sub(r"(//\s*==UserScript==)", r"\1\n// @version      1.0.0", updated, count=1)
 
+                  # 2. Remove existing @updateURL / @downloadURL
                   updated = re.sub(r"^//\s*@(updateURL|downloadURL)\s+.*\r?\n?", "", updated, flags=re.MULTILINE)
 
+                  # 3. Insert @updateURL and @downloadURL right after @version
                   url_block = f"\n// @updateURL    {raw_url}\n// @downloadURL  {raw_url}"
                   updated = re.sub(r"(//\s*@version\s+[^\r\n]+)", r"\1" + url_block, updated, count=1)
 
@@ -58,10 +45,3 @@ jobs:
 
                   print(f"Updated {rel_path} -> matched @version: {count}")
           '
-
-      - name: Commit updated userscripts
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add -A
-          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: bump @version and sync URLs [skip ci]" && git push)
