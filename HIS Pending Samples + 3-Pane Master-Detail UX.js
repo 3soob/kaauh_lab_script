@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HIS Pending Samples + 3-Pane Master-Detail UX
 // @namespace    http://tampermonkey.net/
-// @version      28.5
+// @version      28.6
 // @updateURL    https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/HIS%20Pending%20Samples%20%2B%203-Pane%20Master-Detail%20UX.js
 // @downloadURL  https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/HIS%20Pending%20Samples%20%2B%203-Pane%20Master-Detail%20UX.js
 // @description  3-pane UI: stable left barcode list, parallel bulk status sync, persistent center pane header & embedded HIS order page, simplified responsive headers, manual test exclusion & ultra-compact table, right action panel.

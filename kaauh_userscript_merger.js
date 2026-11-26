@@ -300,6 +300,8 @@ function buildMergedHeader(modules) {
     `// @name         ${MERGED_META.name}`,
     `// @namespace    ${MERGED_META.namespace}`,
     `// @version      ${MERGED_META.version}`,
+// @updateURL    https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/kaauh_userscript_merger.js
+// @downloadURL  https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/kaauh_userscript_merger.js
     `// @description  ${MERGED_META.description}`,
     `// @author       ${MERGED_META.author}`,
   ];

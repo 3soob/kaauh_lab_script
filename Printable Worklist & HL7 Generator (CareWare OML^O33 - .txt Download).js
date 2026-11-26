@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Printable Worklist & HL7 Generator (CareWare OML^O33 - .txt Download)
 // @namespace    http://tampermonkey.net/
-// @version      8.36
+// @version      8.37
 // @updateURL    https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/Printable%20Worklist%20%26%20HL7%20Generator%20%28CareWare%20OML%5EO33%20-%20.txt%20Download%29.js
 // @downloadURL  https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/Printable%20Worklist%20%26%20HL7%20Generator%20%28CareWare%20OML%5EO33%20-%20.txt%20Download%29.js
 // @description  Generates strict CareWare ADM OML^O33 HL7 (.txt) using cleaned raw test names, prints a worklist, and adds a mapped New HL7 button with per-test routing between Alinity/VIDAPTOR and CareWare/ADM
