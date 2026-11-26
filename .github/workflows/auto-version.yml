@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - '*.js'
+      - '**/*.js'
 
 permissions:
   contents: write
@@ -16,54 +16,57 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
 
-      - name: Bump @version and URLs only for changed scripts
+      - name: Bump @version and sync URLs across all repo scripts
         run: |
           python3 -c '
-          import re, subprocess, os, urllib.parse
+          import os, re, urllib.parse
 
           repo_raw_base = "https://raw.githubusercontent.com/3soob/kaauh_lab_script/main"
 
-          # Find only the .js files modified in the latest push
-          diff = subprocess.check_output(["git", "diff", "--name-only", "HEAD~1", "HEAD"]).decode("utf-8")
-          changed_files = [f.strip() for f in diff.splitlines() if f.strip().endswith(".js") and os.path.exists(f.strip())]
+          for root, dirs, files in os.walk("."):
+              # Skip hidden folders like .git or .github
+              dirs[:] = [d for d in dirs if not d.startswith(".")]
 
-          for filepath in changed_files:
-              with open(filepath, "r", encoding="utf-8") as f:
-                  content = f.read()
+              for filename in files:
+                  if not filename.endswith(".js"):
+                      continue
 
-              # Skip plain JS files that do not have a ==UserScript== header
-              if "==UserScript==" not in content:
-                  print(f"Skipping {filepath} (no ==UserScript== header)")
-                  continue
+                  rel_path = os.path.relpath(os.path.join(root, filename), ".").replace("\\", "/")
 
-              encoded_name = urllib.parse.quote(filepath)
-              raw_url = f"{repo_raw_base}/{encoded_name}"
+                  with open(rel_path, "r", encoding="utf-8") as f:
+                      content = f.read()
 
-              # 1. Bump last numeric segment of @version (supports 1.0, 1.0.0, etc.)
-              def bump(match):
-                  prefix, head, last = match.groups()
-                  return f"{prefix}{head}{int(last) + 1}"
+                  if "==UserScript==" not in content:
+                      print(f"Skipping {rel_path} (no ==UserScript== header)")
+                      continue
 
-              updated, count = re.subn(r"(//\s*@version\s+)([\d.]+\.)(\d+)", bump, content, count=1)
-              print(f"{filepath}: matched @version = {count}")
+                  encoded_path = urllib.parse.quote(rel_path)
+                  raw_url = f"{repo_raw_base}/{encoded_path}"
 
-              # 2. Remove existing @updateURL / @downloadURL to avoid duplicates
-              updated = re.sub(r"^//\s*@(updateURL|downloadURL)\s+.*\r?\n?", "", updated, flags=re.MULTILINE)
+                  # 1. Increment the last numeric segment of @version (supports 1.0, 1.0.0, etc.)
+                  def bump(match):
+                      prefix, head, last = match.groups()
+                      return f"{prefix}{head}{int(last) + 1}"
 
-              # 3. Insert @updateURL and @downloadURL right after @version
-              url_block = f"\n// @updateURL    {raw_url}\n// @downloadURL  {raw_url}"
-              updated = re.sub(r"(//\s*@version\s+[^\r\n]+)", r"\1" + url_block, updated, count=1)
+                  updated, count = re.subn(r"(//\s*@version\s+)([\d.]+\.)(\d+)", bump, content, count=1)
 
-              with open(filepath, "w", encoding="utf-8") as f:
-                  f.write(updated)
+                  # 2. Remove existing @updateURL / @downloadURL to prevent duplicates
+                  updated = re.sub(r"^//\s*@(updateURL|downloadURL)\s+.*\r?\n?", "", updated, flags=re.MULTILINE)
+
+                  # 3. Insert @updateURL and @downloadURL directly below @version
+                  url_block = f"\n// @updateURL    {raw_url}\n// @downloadURL  {raw_url}"
+                  updated = re.sub(r"(//\s*@version\s+[^\r\n]+)", r"\1" + url_block, updated, count=1)
+
+                  with open(rel_path, "w", encoding="utf-8") as f:
+                      f.write(updated)
+
+                  print(f"Updated {rel_path} -> matched @version: {count}")
           '
 
-      - name: Commit updated userscript
+      - name: Commit updated userscripts
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add *.js
+          git add -A
           git diff --quiet && git diff --staged --quiet || (git commit -m "chore: bump @version and sync URLs [skip ci]" && git push)
