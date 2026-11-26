@@ -14,7 +14,7 @@
 // @updateURL    https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/kaauh_lab_script.user.js
 // @downloadURL  https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/kaauh_lab_script.user.js
 // ==/UserScript==
-
+//test
 (function () {
     'use strict';
 
