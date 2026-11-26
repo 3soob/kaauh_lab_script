@@ -17,7 +17,6 @@
 // @grant        GM_deleteValue
 // ==/UserScript==
 
-
 (function () {
     'use strict';
 
