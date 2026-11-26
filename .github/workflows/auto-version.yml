@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - '*.user.js'
+      - '*.js'
 
 permissions:
   contents: write
@@ -16,26 +16,39 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
-      - name: Bump @version and ensure update/download URLs
+      - name: Bump @version and URLs only for changed scripts
         run: |
           python3 -c '
-          import re, glob
+          import re, subprocess, os, urllib.parse
 
           repo_raw_base = "https://raw.githubusercontent.com/3soob/kaauh_lab_script/main"
 
-          for filepath in glob.glob("*.user.js"):
+          # Find only the .js files modified in the latest push
+          diff = subprocess.check_output(["git", "diff", "--name-only", "HEAD~1", "HEAD"]).decode("utf-8")
+          changed_files = [f.strip() for f in diff.splitlines() if f.strip().endswith(".js") and os.path.exists(f.strip())]
+
+          for filepath in changed_files:
               with open(filepath, "r", encoding="utf-8") as f:
                   content = f.read()
 
-              raw_url = f"{repo_raw_base}/{filepath}"
+              # Skip plain JS files that do not have a ==UserScript== header
+              if "==UserScript==" not in content:
+                  print(f"Skipping {filepath} (no ==UserScript== header)")
+                  continue
 
-              # 1. Increment patch version
+              encoded_name = urllib.parse.quote(filepath)
+              raw_url = f"{repo_raw_base}/{encoded_name}"
+
+              # 1. Bump last numeric segment of @version (supports 1.0, 1.0.0, etc.)
               def bump(match):
-                  prefix, major, minor, patch = match.groups()
-                  return f"{prefix}{major}.{minor}.{int(patch) + 1}"
+                  prefix, head, last = match.groups()
+                  return f"{prefix}{head}{int(last) + 1}"
 
-              updated = re.sub(r"(//\s*@version\s+)(\d+)\.(\d+)\.(\d+)", bump, content, count=1)
+              updated, count = re.subn(r"(//\s*@version\s+)([\d.]+\.)(\d+)", bump, content, count=1)
+              print(f"{filepath}: matched @version = {count}")
 
               # 2. Remove existing @updateURL / @downloadURL to avoid duplicates
               updated = re.sub(r"^//\s*@(updateURL|downloadURL)\s+.*\r?\n?", "", updated, flags=re.MULTILINE)
@@ -52,5 +65,5 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add *.user.js
+          git add *.js
           git diff --quiet && git diff --staged --quiet || (git commit -m "chore: bump @version and sync URLs [skip ci]" && git push)
