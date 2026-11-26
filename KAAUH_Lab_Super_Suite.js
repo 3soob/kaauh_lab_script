@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name        KAAUH Lab Super Suite
 // @namespace   Violentmonkey Scripts
-// @version     15.1
-// @description Merges verification buttons (F7/F8), dynamic alerts (including HbA1c check and improved 'No Result' detection), critical & amended result reporting, intelligently relocates misplaced alerts, and adds an advanced, flicker-free inline sample counter with a modern visual interface. Includes Server Status Indicator.
+// @version     15.3
+// @description Merges verification buttons (F7/F8), dynamic alerts (including HbA1c check and improved 'No Result' detection), critical & amended result reporting, intelligently relocates misplaced alerts, and adds an advanced, flicker-free inline sample counter with a modern visual interface. Includes Server Status Indicator and single-line sticky toolbar layout.
 // @match       *://his.kaauh.org/lab/*
 // @grant       GM_addStyle
 // @author      Hamad AlShegifi
@@ -65,6 +65,54 @@
         /* Hide the default Previous and Next buttons */
         #btnPrevious, #btnNext {
             display: none !important;
+        }
+
+        /* Force the entire sticky button toolbar onto a single non-wrapping line */
+        .btn-area.stickey-btnset {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            gap: 4px !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            white-space: nowrap !important;
+            scrollbar-width: thin;
+        }
+
+        /* Prevent native Angular button groups from shrinking or wrapping */
+        .btn-area.stickey-btnset > .btn-group {
+            display: inline-flex !important;
+            flex-shrink: 0 !important;
+            margin-right: 0 !important;
+            margin-bottom: 0 !important;
+        }
+
+        /* Collapse empty Angular placeholder btn-groups and hidden buttons that waste horizontal space */
+        .btn-area.stickey-btnset > .btn-group:empty,
+        .btn-area.stickey-btnset > .btn-group:has(> div:empty),
+        .btn-area.stickey-btnset > .btn-group:has(button[hidden]:only-child),
+        .btn-area.stickey-btnset > .btn-group:has(> div > button[hidden]:only-child) {
+            display: none !important;
+        }
+
+        /* Slightly compact native buttons so everything fits comfortably on one line */
+        .btn-area.stickey-btnset .app-btn,
+        .btn-area.stickey-btnset .dropdown-toggle {
+            padding: 4px 8px !important;
+            font-size: 12.5px !important;
+            white-space: nowrap !important;
+        }
+
+        /* Keep custom script container inline without shrinking */
+        #custom-script-buttons {
+            display: inline-flex !important;
+            flex-wrap: nowrap !important;
+            flex-shrink: 0 !important;
+            align-items: center !important;
+            gap: 5px !important;
+            margin-left: 4px !important;
+            vertical-align: middle !important;
+            white-space: nowrap !important;
         }
 
         @keyframes fadeIn {
@@ -502,9 +550,9 @@
             .fa-exclamation-triangle:before { content: "\\f071"; }
             .fa-user:before { content: "\\f007"; }
             .fa-id-card:before { content: "\\f2c2"; }
-            .fa-hospital-alt:before { content: "\\f0f8"; } /* Using fa-hospital-o from v4 */
+            .fa-hospital-alt:before { content: "\\f0f8"; }
             .fa-barcode:before { content: "\\f02a"; }
-            .fa-file-signature:before { content: "\\f0f6"; } /* Using fa-file-text-o from v4 */
+            .fa-file-signature:before { content: "\\f0f6"; }
             .fa-ban:before { content: "\\f05e"; }
         `;
         const head = document.head || document.body;
@@ -521,17 +569,18 @@
         button.innerText = label;
         const styles = {
             'font-family': 'Arial, sans-serif',
-            'font-size': '14px',
-            'font-weight': 'normal',
+            'font-size': '12.5px',
+            'font-weight': '600',
             'color': '#ffffff',
             'background-color': className.includes('success') ? '#28a745' : '#2594d9',
-            'padding': '8px 16px',
+            'padding': '4px 10px',
             'border': 'none',
-            'border-radius': '5px',
+            'border-radius': '4px',
             'text-shadow': 'none',
             'cursor': 'pointer',
-            'line-height': '1.5',
+            'line-height': '1.4',
             'vertical-align': 'middle',
+            'white-space': 'nowrap',
         };
         for (const [prop, value] of Object.entries(styles)) {
             button.style.setProperty(prop, value, 'important');
@@ -625,23 +674,24 @@
     function createReportCriticalResultButton() {
         const button = document.createElement('button');
         button.type = 'button';
-        button.className = 'btn report-critical-btn'; // Use a more generic class for styling
+        button.className = 'btn report-critical-btn';
         button.title = 'Report Critical Result';
         const styles = {
-            'background-color': '#dc3545', // Critical red
+            'background-color': '#dc3545',
             'color': 'white',
             'border': '1px solid #c82333',
-            'border-radius': '8px',
-            'padding': '8px 14px',
-            'font-size': '14px',
+            'border-radius': '6px',
+            'padding': '4px 10px',
+            'font-size': '12.5px',
             'font-weight': '600',
             'cursor': 'pointer',
             'display': 'inline-flex',
             'align-items': 'center',
-            'gap': '8px',
-            'line-height': '1.5',
+            'gap': '5px',
+            'line-height': '1.4',
+            'white-space': 'nowrap',
             'transition': 'background-color 0.2s, box-shadow 0.2s',
-            'box-shadow': '0 2px 4px rgba(0,0,0,0.1)',
+            'box-shadow': '0 1px 3px rgba(0,0,0,0.1)',
         };
         for (const [prop, value] of Object.entries(styles)) {
             button.style.setProperty(prop, value, 'important');
@@ -649,14 +699,14 @@
 
         button.onmouseover = () => {
             button.style.setProperty('background-color', '#c82333', 'important');
-            button.style.setProperty('box-shadow', '0 4px 8px rgba(0,0,0,0.15)', 'important');
+            button.style.setProperty('box-shadow', '0 3px 6px rgba(0,0,0,0.15)', 'important');
         };
         button.onmouseout = () => {
             button.style.setProperty('background-color', '#dc3545', 'important');
-            button.style.setProperty('box-shadow', '0 2px 4px rgba(0,0,0,0.1)', 'important');
+            button.style.setProperty('box-shadow', '0 1px 3px rgba(0,0,0,0.1)', 'important');
         };
 
-        button.innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size: 1.1em !important;"></i><span>Report Critical🧪</span>';
+        button.innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size: 1em !important;"></i><span>Report Critical🧪</span>';
         button.onclick = initiateManualCriticalReport;
         return button;
     }
@@ -667,20 +717,21 @@
         button.className = 'btn report-amended-btn';
         button.title = 'Report Amended Result';
         const styles = {
-            'background-color': '#ffc107', // Warning yellow
-            'color': '#212529', // Dark text
+            'background-color': '#ffc107',
+            'color': '#212529',
             'border': '1px solid #e0a800',
-            'border-radius': '8px',
-            'padding': '8px 14px',
-            'font-size': '14px',
+            'border-radius': '6px',
+            'padding': '4px 10px',
+            'font-size': '12.5px',
             'font-weight': '600',
             'cursor': 'pointer',
             'display': 'inline-flex',
             'align-items': 'center',
-            'gap': '8px',
-            'line-height': '1.5',
+            'gap': '5px',
+            'line-height': '1.4',
+            'white-space': 'nowrap',
             'transition': 'background-color 0.2s, box-shadow 0.2s',
-            'box-shadow': '0 2px 4px rgba(0,0,0,0.1)',
+            'box-shadow': '0 1px 3px rgba(0,0,0,0.1)',
         };
          for (const [prop, value] of Object.entries(styles)) {
             button.style.setProperty(prop, value, 'important');
@@ -688,112 +739,107 @@
 
         button.onmouseover = () => {
             button.style.setProperty('background-color', '#e0a800', 'important');
-            button.style.setProperty('box-shadow', '0 4px 8px rgba(0,0,0,0.15)', 'important');
+            button.style.setProperty('box-shadow', '0 3px 6px rgba(0,0,0,0.15)', 'important');
         };
         button.onmouseout = () => {
             button.style.setProperty('background-color', '#ffc107', 'important');
-            button.style.setProperty('box-shadow', '0 2px 4px rgba(0,0,0,0.1)', 'important');
+            button.style.setProperty('box-shadow', '0 1px 3px rgba(0,0,0,0.1)', 'important');
         };
 
-        button.innerHTML = '<i class="fas fa-file-signature" style="font-size: 1.1em !important;"></i><span>Report Amend🧪</span>';
+        button.innerHTML = '<i class="fas fa-file-signature" style="font-size: 1em !important;"></i><span>Report Amend🧪</span>';
         button.onclick = initiateAmendedReport;
         return button;
     }
 
-   // --- New Functionality: Server Status Indicator ---
-function createServerStatusIndicator() {
-    const container = document.createElement('div');
-    container.id = 'server-status-indicator';
-    container.title = "Server Status: Checking...";
-    container.style.cssText = `
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        margin-left: 8px;
-        padding: 6px 12px;
-        border-radius: 16px;
-        background-color: #6c757d; /* Default Grey (Offline/Unknown) */
-        box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
-        border: 1px solid #545b62;
-        cursor: help;
-        transition: background-color 0.3s ease, box-shadow 0.3s ease;
-        vertical-align: middle;
-    `;
+    // --- Server Status Indicator ---
+    function createServerStatusIndicator() {
+        const container = document.createElement('div');
+        container.id = 'server-status-indicator';
+        container.title = "Server Status: Checking...";
+        container.style.cssText = `
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            margin-left: 2px;
+            padding: 4px 9px;
+            border-radius: 14px;
+            background-color: #6c757d;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+            border: 1px solid #545b62;
+            cursor: help;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+            vertical-align: middle;
+            white-space: nowrap;
+        `;
 
-    // Add status dot
-    const statusDot = document.createElement('span');
-    statusDot.id = 'server-status-dot';
-    statusDot.style.cssText = `
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background-color: #495057;
-        box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
-    `;
+        const statusDot = document.createElement('span');
+        statusDot.id = 'server-status-dot';
+        statusDot.style.cssText = `
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #495057;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+            flex-shrink: 0;
+        `;
 
-    // Add status text
-    const statusText = document.createElement('span');
-    statusText.id = 'server-status-text';
-    statusText.textContent = 'Checking...';
-    statusText.style.cssText = `
-        color: #ffffff;
-        font-size: 13px;
-        font-weight: 600;
-        white-space: nowrap;
-    `;
+        const statusText = document.createElement('span');
+        statusText.id = 'server-status-text';
+        statusText.textContent = 'Checking...';
+        statusText.style.cssText = `
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        `;
 
-    container.appendChild(statusDot);
-    container.appendChild(statusText);
+        container.appendChild(statusDot);
+        container.appendChild(statusText);
 
-    return container;
-}
-
-async function checkServerHealth() {
-    const indicator = document.getElementById('server-status-indicator');
-    const statusDot = document.getElementById('server-status-dot');
-    const statusText = document.getElementById('server-status-text');
-
-    if (!indicator || !statusDot || !statusText) return;
-
-    try {
-        // Using a short timeout to prevent long waits
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
-
-        // Fetch to root of local server (assuming same port as LOCAL_SERVER_SAVE_URL)
-        await fetch('http://localhost:5000/', {
-            method: 'GET',
-            signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        // Success (Online)
-        indicator.style.backgroundColor = '#28a745'; // Green
-        indicator.style.borderColor = '#1e7e34';
-        indicator.style.boxShadow = '0 0 8px rgba(40, 167, 69, 0.6)'; // Green Glow
-        indicator.title = "Server Status: ONLINE (Connected)";
-
-        statusDot.style.backgroundColor = '#ffffff';
-        statusText.textContent = 'Connected';
-
-    } catch (error) {
-        // Error (Offline)
-        indicator.style.backgroundColor = '#6c757d'; // Grey
-        indicator.style.borderColor = '#545b62';
-        indicator.style.boxShadow = 'none';
-        indicator.title = "Server Status: OFFLINE (Ensure Python EXE is running)";
-
-        statusDot.style.backgroundColor = '#495057';
-        statusText.textContent = 'Disconnected';
+        return container;
     }
-}
 
+    async function checkServerHealth() {
+        const indicator = document.getElementById('server-status-indicator');
+        const statusDot = document.getElementById('server-status-dot');
+        const statusText = document.getElementById('server-status-text');
+
+        if (!indicator || !statusDot || !statusText) return;
+
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+            await fetch('http://localhost:5000/', {
+                method: 'GET',
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            indicator.style.backgroundColor = '#28a745';
+            indicator.style.borderColor = '#1e7e34';
+            indicator.style.boxShadow = '0 0 8px rgba(40, 167, 69, 0.6)';
+            indicator.title = "Server Status: ONLINE (Connected)";
+
+            statusDot.style.backgroundColor = '#ffffff';
+            statusText.textContent = 'Connected';
+
+        } catch (error) {
+            indicator.style.backgroundColor = '#6c757d';
+            indicator.style.borderColor = '#545b62';
+            indicator.style.boxShadow = 'none';
+            indicator.title = "Server Status: OFFLINE (Ensure Python EXE is running)";
+
+            statusDot.style.backgroundColor = '#495057';
+            statusText.textContent = 'Disconnected';
+        }
+    }
 
     function createToggleIcon(id, isActive, onClick) {
         const icon = document.createElement('span');
         icon.id = id;
-        icon.innerHTML = `<i class="fas fa-arrow-circle-left" style="color: ${isActive ? '#008000' : '#d1cfcf'}; font-size: 1.6em; vertical-align: middle;"></i>`;
+        icon.innerHTML = `<i class="fas fa-arrow-circle-left" style="color: ${isActive ? '#008000' : '#d1cfcf'}; font-size: 1.35em; vertical-align: middle;"></i>`;
         icon.style.cursor = 'pointer';
         icon.style.display = 'inline-flex';
         icon.style.alignItems = 'center';
@@ -817,7 +863,6 @@ async function checkServerHealth() {
             return;
         }
 
-        // The anchor is the "Re-Run Test" button.
         const reRunButton = document.querySelector(CONFIG_MAIN.SELECTORS.RERUN_TEST_BTN);
         const anchorElement = reRunButton ? reRunButton.closest('.btn-group') : null;
         if (!anchorElement) {
@@ -827,13 +872,6 @@ async function checkServerHealth() {
 
         const buttonDiv = document.createElement('div');
         buttonDiv.id = 'custom-script-buttons';
-        buttonDiv.style.cssText = `
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            margin-left: 10px;
-            vertical-align: middle;
-        `;
 
         const verify1Button = createVerifyButton('VERIFY1 (F7)', 'btn btn-success btn-sm', () => {
             verify1Clicked = true; verify2Clicked = false;
@@ -847,12 +885,9 @@ async function checkServerHealth() {
         }, 'verify2-btn');
         const reportAmendedButton = createReportAmendedResultButton();
         const reportCriticalButton = createReportCriticalResultButton();
-        // REMOVED: const rejectSampleButton = createRejectSampleButton();
 
         const verify1Icon = createToggleIcon('verify1Icon', verify1Toggle, () => handleVerifyToggle('verify1'));
         const verify2Icon = createToggleIcon('verify2Icon', verify2Toggle, () => handleVerifyToggle('verify2'));
-
-        // Added Server Status Indicator
         const serverStatusIndicator = createServerStatusIndicator();
 
         buttonDiv.append(
@@ -864,9 +899,7 @@ async function checkServerHealth() {
         anchorElement.after(buttonDiv);
         logDebugMain("Custom buttons added after 'Re-Run Test' button.");
 
-        // Initialize Server Check
         checkServerHealth();
-        // Poll every 5 seconds
         setInterval(checkServerHealth, 5000);
     }
 
@@ -875,7 +908,7 @@ async function checkServerHealth() {
         const boxes = document.querySelectorAll(CONFIG_MAIN.SELECTORS.UNCHECKED_BOX);
         boxes.forEach(box => {
             const row = box.closest(CONFIG_MAIN.SELECTORS.CHECKBOX_ROW);
-            if (row && row.offsetParent !== null) { // Check if row is visible
+            if (row && row.offsetParent !== null) {
                 const testDescElement = row.querySelector(CONFIG_MAIN.SELECTORS.TEST_DESC_CELL);
                 const descText = testDescElement?.textContent.trim().toLowerCase();
                 if (descText) {
@@ -907,9 +940,7 @@ async function checkServerHealth() {
     const clickCompleteTechnicalVerificationButton = () => clickButton(CONFIG_MAIN.SELECTORS.COMPLETE_TECH, clickFinalVerifyButton);
     const clickCompleteMedicalVerificationButton = () => clickButton(CONFIG_MAIN.SELECTORS.COMPLETE_MED, clickFinalVerifyButton);
     const clickFinalVerifyButton = () => clickButton(CONFIG_MAIN.SELECTORS.FINAL_VERIFY);
-    function checkForDisabledButtons() {
-        // Proactive checks can be added here if needed
-    }
+    function checkForDisabledButtons() {}
 
     function checkUrlAndTriggerClickForUndefined() {
         if (window.location.href.endsWith('/undefined')) {
@@ -929,18 +960,15 @@ async function checkServerHealth() {
 
     let isNavigatingBack = false;
 
-    // --- Modified Toast Observer: Separated Toast Closing and Navigation ---
     const toastObserver = new MutationObserver(mutations => {
         mutations.forEach(mutation => {
             mutation.addedNodes.forEach(node => {
                 if (node.nodeType === Node.ELEMENT_NODE) {
-                    // Check if added node is toast-success OR contains it
                     let successToast = node.matches('.toast-success') ? node : node.querySelector('.toast-success');
 
                     if (successToast) {
                         logDebugMain("Success toast detected.");
 
-                        // === PART 1: ALWAYS CLOSE TOAST IF VERIFY BUTTON WAS CLICKED ===
                         if (verify1Clicked || verify2Clicked) {
                             const closeBtn = successToast.querySelector('button.toast-close-button') || node.querySelector('button.toast-close-button');
                             if (closeBtn) {
@@ -949,46 +977,34 @@ async function checkServerHealth() {
                             }
                         }
 
-                        // === PART 2: NAVIGATE BACK ONLY IF TOGGLE IS ON ===
                         if ((verify1Clicked && verify1Toggle) || (verify2Clicked && verify2Toggle)) {
-                            // Prevent duplicate navigation
                             if (!isNavigatingBack) {
                                 logDebugMain("Toggle is active. Initiating go-back sequence.");
-
                                 logDebugMain("Waiting for Verification Page/Modal to close...");
 
-                                // --- WAIT FOR PAGE TO CLOSE ---
                                 const checkModalClosedInterval = setInterval(() => {
-
-                                    // 1. Check if the "Final Verify" button is still present
                                     const verifyBtn = document.querySelector(CONFIG_MAIN.SELECTORS.FINAL_VERIFY);
-
-                                    // 2. Check if any bootstrap modal is still actively shown
                                     const activeModal = document.querySelector('.modal.show') || document.querySelector('.modal.in');
 
-                                    // CONDITION: If the Verify Button is gone AND no Modal is visible
                                     if (!verifyBtn && !activeModal) {
                                         clearInterval(checkModalClosedInterval);
 
-                                        if (!isNavigatingBack) { // Double-check lock
+                                        if (!isNavigatingBack) {
                                             isNavigatingBack = true;
                                             logDebugMain("Verification Page closed. Executing Go Back.");
 
                                             window.history.back();
 
-                                            // Reset flags
                                             verify1Clicked = false;
                                             verify2Clicked = false;
 
-                                            // Release navigation lock after a delay
                                             setTimeout(() => {
                                                 isNavigatingBack = false;
                                             }, 1000);
                                         }
                                     }
-                                }, 100); // Check every 100ms
+                                }, 100);
 
-                                // SAFETY TIMEOUT: Force go back after 3 seconds if the modal check fails
                                 setTimeout(() => {
                                     if (!isNavigatingBack && ((verify1Clicked && verify1Toggle) || (verify2Clicked && verify2Toggle))) {
                                         clearInterval(checkModalClosedInterval);
@@ -1006,12 +1022,10 @@ async function checkServerHealth() {
                                 }, 3000);
                             } else {
                                 logDebugMain("Already navigating back. Ignoring duplicate toast trigger.");
-                                // Still reset the clicked flags to be safe
                                 verify1Clicked = false;
                                 verify2Clicked = false;
                             }
                         } else {
-                            // Toggle is NOT active, just reset flags normally
                             verify1Clicked = false;
                             verify2Clicked = false;
                         }
@@ -1028,6 +1042,7 @@ async function checkServerHealth() {
         if (e.key === 'F7') { e.preventDefault(); document.querySelector(CONFIG_MAIN.SELECTORS.VERIFY1_BTN)?.click(); }
         else if (e.key === 'F8') { e.preventDefault(); document.querySelector(CONFIG_MAIN.SELECTORS.VERIFY2_BTN)?.click(); }
     });
+
     // --- Integrated Alerts Scanner Code ---
     if (typeof XLSX === 'undefined') {
         console.warn("[Alerts Scanner] SheetJS library (XLSX) not found. Local XLSX saving will not work.");
@@ -1086,6 +1101,7 @@ async function checkServerHealth() {
         button.onmouseup = () => button.style.transform = 'scale(1)';
         return button;
     };
+
     const createFormGroup = (label, inputId, placeholder, type = 'text') => {
         const formGroup = document.createElement('div');
         const formLabel = document.createElement('label');
@@ -1104,6 +1120,7 @@ async function checkServerHealth() {
         formGroup.appendChild(formInput);
         return formGroup;
     };
+
     function applyFlashingEffect(row) {
         if (!row || row.dataset.flashing === 'true') return;
         row.dataset.flashing = 'true';
@@ -1186,7 +1203,7 @@ async function checkServerHealth() {
             notifiedPersonTelExt = notifiedPersonTelExtInput ? notifiedPersonTelExtInput.value : '';
             readBack = readBackCheckbox ? readBackCheckbox.checked : false;
             reportingUserId = userIdInput ? userIdInput.value : (alertData.userId || 'N/A');
-        } else if (isFromManualReportModal || isFromAmendedReportModal) { // Combine manual and amended
+        } else if (isFromManualReportModal || isFromAmendedReportModal) {
             logAlertDebug("sendAlertDataToServer: Data sourced from Manual or Amended Report Modal payload fields.");
             notifiedPersonName = alertData.notifiedPersonName || '';
             notifiedPersonTelExt = alertData.notifiedPersonTelExt || '';
@@ -1199,7 +1216,6 @@ async function checkServerHealth() {
             readBack = alertData.readBack || false;
             reportingUserId = alertData.userName || alertData.userId || 'N/A';
         }
-
 
         const now = new Date();
         const date = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
@@ -1235,7 +1251,6 @@ async function checkServerHealth() {
         };
         logAlertDebug("Data prepared for server:", JSON.stringify(dataToSend, null, 2));
 
-
         try {
             const response = await fetch(CONFIG_ALERTS.LOCAL_SERVER_SAVE_URL, {
                 method: 'POST',
@@ -1255,7 +1270,6 @@ async function checkServerHealth() {
             return false;
         }
     }
-
 
     function closeAlertModalAction() {
         logAlertDebug("closeAlertModalAction triggered.");
@@ -1451,8 +1465,7 @@ async function checkServerHealth() {
                     bgColorCard = alert.flag === 'CL' ? '#e7f3ff' : (alert.flag === 'CH' ? '#f8d7da' : '#fdf7f7');
                 } else if (alert.type === 'greaterThan') {
                     borderColorCard = '#ffc107'; bgColorCard = '#fff9e6';
-                } else if (alert.type === 'noresult')
-                {
+                } else if (alert.type === 'noresult') {
                     borderColorCard = '#6c757d'; bgColorCard = '#f8f9fa';
                 }
                 Object.assign(alertCard.style, {
@@ -1570,7 +1583,6 @@ async function checkServerHealth() {
         modalBox.appendChild(buttonContainer);
         modalBox.dataset.alerts = JSON.stringify(alertsDisplayedInModal.map(a => ({ type: a.type, rowId: a.rowId })));
 
-
         overlay.appendChild(modalBox);
         document.body.appendChild(overlay);
         setTimeout(() => {
@@ -1665,7 +1677,6 @@ async function checkServerHealth() {
                 patientData.patientLocation = 'N/A (selector failed)';
             }
 
-
             if (barcodeEl) {
                 patientData.sampleBarcode = barcodeEl.textContent.trim() || 'N/A (empty)';
             } else {
@@ -1693,9 +1704,7 @@ async function checkServerHealth() {
         return { data: patientData, allEssentialDataRetrieved: allEssentialDataRetrieved };
     }
 
-
     async function checkForIssues() {
-        const totalCheckStartTime = performance.now();
         logAlertDebug("checkForIssues started.");
         if (!isScanningActive || isAlertModalOpen || isReportModalOpen || isAmendedReportModalOpen) {
             logAlertDebug(`checkForIssues aborted. isScanningActive: ${isScanningActive}, isAlertModalOpen: ${isAlertModalOpen}, isReportModalOpen: ${isReportModalOpen}, isAmendedReportModalOpen: ${isAmendedReportModalOpen}`);
@@ -1735,7 +1744,6 @@ async function checkServerHealth() {
             const baseRowIdentifier = centerRow.getAttribute('row-id') || centerRow.getAttribute('row-index') || `scan_row_${index}`;
             const resultText = resultDiv?.textContent?.trim() || '';
             const uomText = uomCell?.textContent?.trim() || '';
-            // *** FIX: Use a more aggressive normalization to catch all "noresult" variations ***
             const normalizedResultText = resultText.toLowerCase().replace(/[^a-z]/g, '');
             const flagTextByIndicator = flagSpan?.textContent?.trim()?.toUpperCase() || '';
 
@@ -1755,7 +1763,7 @@ async function checkServerHealth() {
             const isNoResult = normalizedResultText.includes('noresult');
             const isDilution = resultText.includes(">");
             let alertType = null, alertMessage = "", alertComment = null;
-            // --- NEW: Special check for Haemoglobin A1C (HbA1C) ---
+
             if (testDesc.toLowerCase().includes('haemoglobin a1c') || testDesc.toLowerCase().includes('hba1c')) {
                 const resultValue = parseFloat(resultText);
                 if (!isNaN(resultValue) && (resultValue < 4 || resultValue > 13)) {
@@ -1764,9 +1772,7 @@ async function checkServerHealth() {
                     alertComment = "Please check and validate this result. Value is outside the 4-13 range.";
                 }
             }
-            // --- END: Special check ---
 
-            // --- FIX: Reordered logic to prioritize specific text-based alerts over generic critical flags ---
             if (isNoResult && !alertType) {
                 alertType = "noresult";
                 alertMessage = CONFIG_ALERTS.NO_RESULT_MESSAGE;
@@ -1774,7 +1780,7 @@ async function checkServerHealth() {
                 alertType = "greaterThan";
                 alertMessage = CONFIG_ALERTS.DILUTION_MESSAGE;
                 alertComment = "Sample needs dilution";
-            } else if (isCritical && !alertType) { // This now runs only if the above text-based checks didn't match
+            } else if (isCritical && !alertType) {
                 alertType = "critical";
                 alertMessage = isCriticalByFlag ? `CRITICAL ${flagTextByIndicator === "CL" ? "LOW" : "HIGH"} RESULT!` : "CRITICAL RESULT (Visual Indicator)!";
             }
@@ -1821,7 +1827,6 @@ async function checkServerHealth() {
 
         return (newPotentialAlertsForAutoModalDisplay.length > 0 && !isAlertModalOpen && !document.getElementById('custom-alert-modal-overlay') && allEssentialPatientDataAvailable);
     }
-
 
     function collectAllTestsWithResults() {
         logDebugMain("Collecting all tests with results for reporting...");
@@ -1909,7 +1914,6 @@ async function checkServerHealth() {
         const reportIcon = document.createElement('i');
         reportIcon.className = 'fas fa-file-signature';
         reportIcon.style.fontSize = '26px'; reportIcon.style.color = '#d9534f';
-        // Critical red
         headerDiv.appendChild(reportIcon);
         const title = document.createElement('h2');
         title.textContent = 'Report Critical Test Results';
@@ -1959,7 +1963,6 @@ async function checkServerHealth() {
         patientInfoContainer.appendChild(createInfoItemLocal('Sample Barcode', pDataForModal.sampleBarcode, 'fa-barcode'));
         modalBox.appendChild(patientInfoContainer);
 
-
         const testsListTitle = document.createElement('h3');
         testsListTitle.textContent = 'Select Tests to Include in Report:';
         Object.assign(testsListTitle.style, { fontSize: '19px', fontWeight: '600', color: '#343a40', margin: '0 0 12px 0' });
@@ -1981,12 +1984,10 @@ async function checkServerHealth() {
                  testItemDiv.style.backgroundColor = 'rgba(255, 0, 0, 0.05)';
             }
 
-
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox'; checkbox.id = `report_cb_${test.id}`;
             checkbox.checked = test.selected;
-            checkbox.onchange = () => { test.selected = checkbox.checked;
-            };
+            checkbox.onchange = () => { test.selected = checkbox.checked; };
             Object.assign(checkbox.style, { marginRight: '5px', transform: 'scale(1.2)', cursor: 'pointer', accentColor: '#007bff' });
 
             const label = document.createElement('label');
@@ -2105,8 +2106,7 @@ async function checkServerHealth() {
         if (overlay) {
             overlay.style.opacity = '0';
             const modalContent = overlay.querySelector('#report-selection-modal-content');
-            if (modalContent) { modalContent.style.opacity = '0'; modalContent.style.transform = 'translateY(-30px) scale(0.95)';
-            }
+            if (modalContent) { modalContent.style.opacity = '0'; modalContent.style.transform = 'translateY(-30px) scale(0.95)'; }
             overlay.addEventListener('transitionend', () => {
                 if (overlay.parentNode) {
                     overlay.parentNode.removeChild(overlay);
@@ -2116,7 +2116,7 @@ async function checkServerHealth() {
             }, { once: true });
             setTimeout(() => {
                  if (overlay && overlay.parentNode) {
-                          overlay.parentNode.removeChild(overlay);
+                     overlay.parentNode.removeChild(overlay);
                  }
                  if(isReportModalOpen) {
                      isReportModalOpen = false; document.body.style.overflow = '';
@@ -2153,13 +2153,13 @@ async function checkServerHealth() {
             backgroundColor: '#ffffff', borderRadius: '12px',
             boxShadow: '0 16px 32px rgba(0,0,0,0.1), 0 8px 16px rgba(0,0,0,0.08)',
             width: 'calc(100% - 40px)', maxWidth: '1000px', maxHeight: '90vh',
-            padding: '0', // Padding will be handled by inner containers
+            padding: '0',
             position: 'relative', opacity: '0',
             transform: 'translateY(-20px) scale(0.98)',
             transition: 'opacity 0.3s ease-out, transform 0.3s ease-out',
             fontFamily: "'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif",
             color: '#343a40', display: 'flex', flexDirection: 'column',
-            overflow: 'hidden' // Hide overflow on the main box
+            overflow: 'hidden'
         });
         const closeAmendedModalAction = () => {
             if (overlay) {
@@ -2197,7 +2197,6 @@ async function checkServerHealth() {
         reportIcon.className = 'fas fa-file-signature';
         reportIcon.style.fontSize = '26px';
         reportIcon.style.color = '#ffc107';
-        // Dark yellow
         headerDiv.appendChild(reportIcon);
         const title = document.createElement('h2');
         title.textContent = 'Report Amended Result';
@@ -2247,6 +2246,7 @@ async function checkServerHealth() {
         patientInfoContainer.appendChild(createInfoItemLocal('Sample Barcode', pDataForModal.sampleBarcode, 'fa-barcode'));
         modalHeader.appendChild(patientInfoContainer);
         modalBox.appendChild(modalHeader);
+
         // --- Modal Body (Scrollable) ---
         const modalBody = document.createElement('div');
         Object.assign(modalBody.style, {
@@ -2326,6 +2326,7 @@ async function checkServerHealth() {
         reportDetailsDiv.appendChild(formGrid);
         modalBody.appendChild(reportDetailsDiv);
         modalBox.appendChild(modalBody);
+
         // --- Modal Footer (Sticky) ---
         const modalFooter = document.createElement('div');
         modalFooter.style.padding = '16px 32px 32px 32px';
@@ -2336,7 +2337,7 @@ async function checkServerHealth() {
             display: 'flex', justifyContent: 'flex-end', gap: '12px'
         });
         const printButton = createModalButton('Print', 'primary');
-        printButton.style.marginRight = 'auto'; // Pushes it to the left
+        printButton.style.marginRight = 'auto';
         printButton.onclick = () => {
             const reason = document.getElementById('amendedReasonTextarea')?.value.trim() || 'N/A';
             const reportedUserId = document.getElementById('amendedReportUserIdInput')?.value || currentUserId;
@@ -2477,7 +2478,7 @@ async function checkServerHealth() {
                 userName: reportedUserId,
                 notifiedPersonName: notifiedPerson,
                 notifiedPersonTelExt: notifiedContact,
-                readBack: false, // Not applicable here
+                readBack: false,
                 amendmentReason: reason,
                 alerts: amendedTests.map(at => ({
                     testName: at.testName,
@@ -2514,8 +2515,6 @@ async function checkServerHealth() {
         }, 10);
     }
 
-
-
     function startAlertsScannerInternal() {
         logAlertDebug("startAlertsScannerInternal called.");
         if (isScanningActive && issueScanIntervalId === null) {
@@ -2543,7 +2542,6 @@ async function checkServerHealth() {
 
     let previousObservedUrl = window.location.href;
     const pageUrlObserver = new MutationObserver((mutations) => {
-        // ** NEW: On any mutation, check for misplaced alerts **
         const hasAddedNodes = mutations.some(m => m.addedNodes.length > 0);
         if (hasAddedNodes) {
              relocateAllDangerAlerts();
@@ -2587,13 +2585,12 @@ async function checkServerHealth() {
                 const existingAmendedOverlay = document.getElementById('amended-report-modal-overlay'); if (existingAmendedOverlay) existingAmendedOverlay.remove();
                 document.body.style.overflow = '';
 
-                if (!isScanningActive) { isScanningActive = true;
-                }
+                if (!isScanningActive) { isScanningActive = true; }
                 setTimeout(() => {
                     if (window.startAlertsScanner) window.startAlertsScanner();
                     addButtons();
                     addFontAwesome();
-                    monitorOrderedStatus(); // Initial check on new page
+                    monitorOrderedStatus();
                 }, 700);
             } else {
                 const customButtons = document.getElementById('custom-script-buttons');
@@ -2604,15 +2601,13 @@ async function checkServerHealth() {
                 }
             }
             previousObservedUrl = newObservedUrl;
-        } else { // URL hasn't changed, but mutations occurred.
+        } else {
             const stillOnEditPage = newObservedUrl.startsWith(CONFIG_MAIN.URLS.EDIT_PAGE_PREFIX);
             if (stillOnEditPage) {
                 if (!document.getElementById('custom-script-buttons')) {
                     addButtons();
-                // Re-add buttons if missing
                 }
                 addFontAwesome();
-                // Ensure FontAwesome is still there
                 debouncedMonitorOrderedStatus();
                 if (isScanningActive && issueScanIntervalId === null && window.startAlertsScanner) {
                     window.startAlertsScanner();
@@ -2661,14 +2656,12 @@ async function checkServerHealth() {
                 }
             }
         });
-        // MERGED: Check for the receiverStaffID input to add our highlighter
+
         const receiverInput = document.querySelector('input#receiverStaffID');
         if (receiverInput) {
             setupHighlighterInput(receiverInput);
         }
 
-
-        // Cleanup for closed/removed sample counter modals
         activeSampleCounterIntervals.forEach((data, modalElemKey) => {
             const modalStillPresent = document.body.contains(modalElemKey);
             const modalVisible = modalStillPresent && (modalElemKey.classList.contains('show') || (modalElemKey.style.display && modalElemKey.style.display !== 'none') || (!modalElemKey.style.display && modalElemKey.offsetParent !== null));
@@ -2683,10 +2676,9 @@ async function checkServerHealth() {
                 activeSampleCounterIntervals.delete(modalElemKey);
             }
         });
-        // --- END: Integrated Detection Logic ---
-
     });
     pageUrlObserver.observe(document.body, { childList: true, subtree: true });
+
     // --- Initial setup on script load ---
     if (isCorrectPage()) {
         isScanningActive = true;
@@ -2694,29 +2686,26 @@ async function checkServerHealth() {
             if (window.startAlertsScanner) window.startAlertsScanner();
             addFontAwesome();
             addButtons();
-            monitorOrderedStatus(); // Initial check
+            monitorOrderedStatus();
         }, 700);
     } else {
         isScanningActive = false;
     }
 
-    // --- New Functionality: Rejection Data Capture ---
+    // --- Rejection Data Capture ---
     function getRejectionData() {
-        // 1. Barcode
         const barcodeSelect = document.getElementById('barcodecollection');
         let barcodeVal = 'N/A';
         if (barcodeSelect && barcodeSelect.selectedIndex >= 0) {
             barcodeVal = barcodeSelect.options[barcodeSelect.selectedIndex].text.trim();
         }
 
-        // 2. Criteria
         const criteriaSelect = document.getElementById('criteria');
         let criteriaVal = 'N/A';
         if (criteriaSelect && criteriaSelect.selectedIndex >= 0) {
             criteriaVal = criteriaSelect.options[criteriaSelect.selectedIndex].text.trim();
         }
 
-        // 3. Total Tests
         let totalTestsVal = 'N/A';
         const spans = document.querySelectorAll('span');
         for (const span of spans) {
@@ -2726,17 +2715,13 @@ async function checkServerHealth() {
             }
         }
 
-        // 4. Location (Specific to Rejection Modal)
         const locSpan = document.querySelector('.loc-text');
         let locationVal = 'N/A';
         if (locSpan) locationVal = locSpan.textContent.trim();
 
-        // 5. Remarks (Textarea)
-        // Use formcontrolname for specificity, fallback to ID if needed
         const remarksTextarea = document.querySelector('textarea[formcontrolname="rejectionRemarks"]') || document.getElementById('remarks');
         let remarksVal = 'N/A';
         if (remarksTextarea) {
-            // Get value, clean up newlines, and sanitize against our delimiter '##'
             remarksVal = remarksTextarea.value.trim().replace(/##/g, ' - ') || 'N/A';
         }
 
@@ -2745,24 +2730,20 @@ async function checkServerHealth() {
 
     async function handleRejectionSave(e) {
         logDebugMain("Rejection Save Clicked. Capturing data...");
-        // Allow the default save action to proceed (no preventDefault)
 
         const { barcodeVal, criteriaVal, totalTestsVal, locationVal, remarksVal } = getRejectionData();
 
-        // Get standard patient info
         const patientInfoResult = await getPatientDataWithRetry({
              name: CONFIG_ALERTS.PATIENT_NAME_SELECTOR,
              mrn: CONFIG_ALERTS.PATIENT_MRN_SELECTOR,
              location: CONFIG_ALERTS.PATIENT_LOCATION_SELECTOR,
              barcode: CONFIG_ALERTS.SAMPLE_BARCODE_SELECTOR
-        }, 1000); // Short timeout
+        }, 1000);
 
         const pData = patientInfoResult.data;
-        // Override location with the specific one found in modal if valid
         if (locationVal !== 'N/A') {
             pData.patientLocation = locationVal;
         }
-        // Override barcode if captured from the select dropdown
         if (barcodeVal !== 'N/A' && barcodeVal !== '--Select--') {
             pData.sampleBarcode = barcodeVal;
         }
@@ -2777,7 +2758,7 @@ async function checkServerHealth() {
             patientLocation: pData.patientLocation,
             sampleBarcode: pData.sampleBarcode,
             userName: currentUserId,
-            notifiedPersonName: 'Lab Rejection System', // Auto
+            notifiedPersonName: 'Lab Rejection System',
             notifiedPersonTelExt: 'N/A',
             readBack: false,
             amendmentReason: `Sample Rejection: ${criteriaVal}`,
@@ -2787,7 +2768,6 @@ async function checkServerHealth() {
                 uom: '',
                 flag: 'REJECTED',
                 type: 'sample_rejection',
-                // Updated comment format to include remarks with robust '##' delimiter
                 comment: `Criteria: ${criteriaVal} ## Total Tests Affected: ${totalTestsVal} ## Remarks: ${remarksVal}`
             }]
         };
