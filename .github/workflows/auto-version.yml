@@ -17,27 +17,40 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Increment @version in userscript
+      - name: Bump @version and ensure update/download URLs
         run: |
           python3 -c '
           import re, glob
+
+          repo_raw_base = "https://raw.githubusercontent.com/3soob/kaauh_lab_script/main"
 
           for filepath in glob.glob("*.user.js"):
               with open(filepath, "r", encoding="utf-8") as f:
                   content = f.read()
 
+              raw_url = f"{repo_raw_base}/{filepath}"
+
+              # 1. Increment patch version
               def bump(match):
                   prefix, major, minor, patch = match.groups()
                   return f"{prefix}{major}.{minor}.{int(patch) + 1}"
 
               updated = re.sub(r"(//\s*@version\s+)(\d+)\.(\d+)\.(\d+)", bump, content, count=1)
+
+              # 2. Remove existing @updateURL / @downloadURL to avoid duplicates
+              updated = re.sub(r"^//\s*@(updateURL|downloadURL)\s+.*\r?\n?", "", updated, flags=re.MULTILINE)
+
+              # 3. Insert @updateURL and @downloadURL right after @version
+              url_block = f"\n// @updateURL    {raw_url}\n// @downloadURL  {raw_url}"
+              updated = re.sub(r"(//\s*@version\s+[^\r\n]+)", r"\1" + url_block, updated, count=1)
+
               with open(filepath, "w", encoding="utf-8") as f:
                   f.write(updated)
           '
 
-      - name: Commit updated @version
+      - name: Commit updated userscript
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add *.user.js
-          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: bump @version [skip ci]" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: bump @version and sync URLs [skip ci]" && git push)
