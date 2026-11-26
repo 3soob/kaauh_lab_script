@@ -7,7 +7,7 @@
 // @match        https://his.kaauh.org/lab/*
 // @grant        GM_xmlhttpRequest
 // ==/UserScript==
-//test
+//test123
 (function() {
     'use strict';
 
