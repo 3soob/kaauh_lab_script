@@ -1,7 +1,9 @@
 // ==UserScript==
 // @name         Manual Confirm Patient Report Uploader (Multi-File Batching - KAAUH)
 // @namespace    http://tampermonkey.net/
-// @version      1.9
+// @version      1.10
+// @updateURL    https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/Manual%20Confirm%20Patient%20Report%20Uploader%20%28Multi-File%20Batching%20-%20KAAUH%29.js
+// @downloadURL  https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/Manual%20Confirm%20Patient%20Report%20Uploader%20%28Multi-File%20Batching%20-%20KAAUH%29.js
 // @description  Groups multiple PDFs per MRN, selects Chemistry Lab on both dropdowns, uploads in one batch, appends _reported, and is visible strictly on #/documents
 // @match        *://his.kaauh.org/lab/*
 // @grant        GM_xmlhttpRequest
