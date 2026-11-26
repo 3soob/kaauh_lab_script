@@ -1,0 +1,43 @@
+name: GreasyFork-Style Version Bump
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '*.user.js'
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Increment @version in userscript
+        run: |
+          python3 -c '
+          import re, glob
+
+          for filepath in glob.glob("*.user.js"):
+              with open(filepath, "r", encoding="utf-8") as f:
+                  content = f.read()
+
+              def bump(match):
+                  prefix, major, minor, patch = match.groups()
+                  return f"{prefix}{major}.{minor}.{int(patch) + 1}"
+
+              updated = re.sub(r"(//\s*@version\s+)(\d+)\.(\d+)\.(\d+)", bump, content, count=1)
+              with open(filepath, "w", encoding="utf-8") as f:
+                  f.write(updated)
+          '
+
+      - name: Commit updated @version
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add *.user.js
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: bump @version [skip ci]" && git push)
