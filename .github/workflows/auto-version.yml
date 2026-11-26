@@ -1,4 +1,22 @@
-- name: Bump @version and sync URLs across all repo scripts
+name: GreasyFork-Style Version Bump
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['**/*.js']
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Bump @version and sync URLs across all repo scripts
         run: |
           python3 -c '
           import os, re, urllib.parse
@@ -45,3 +63,10 @@
 
                   print(f"Updated {rel_path} -> matched @version: {count}")
           '
+
+      - name: Commit updated userscripts
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -A
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: bump @version and sync URLs [skip ci]" && git push)
