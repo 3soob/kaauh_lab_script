@@ -8,8 +8,6 @@
 // @author      Hamad AlShegifi
 // @license     MIT
 // @run-at      document-idle
-// @downloadURL https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/KAAUH_Lab_Super_Suite.js
-// @updateURL https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/KAAUH_Lab_Super_Suite.js
 // ==/UserScript==
 
 (function() {
