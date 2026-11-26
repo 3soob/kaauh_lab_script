@@ -11,10 +11,8 @@
 // @grant        unsafeWindow
 // @run-at       document-idle
 // @author       Hamad Al-Shegifi
-// @updateURL    https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/kaauh_lab_script.user.js
-// @downloadURL  https://github.com/3soob/kaauh_lab_script/raw/refs/heads/main/kaauh_lab_script.user.js
 // ==/UserScript==
-//test
+//test113
 (function () {
     'use strict';
 
