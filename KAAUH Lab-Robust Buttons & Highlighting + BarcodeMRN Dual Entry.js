@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         KAAUH Lab - Robust Buttons & Highlighting + Barcode/MRN Dual Entry
 // @namespace    Violentmonkey Scripts
-// @version      6.0.6
-// @updateURL    https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/kaauh_lab_script.user.js
-// @downloadURL  https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/kaauh_lab_script.user.js
+// @version      6.0.7
+// @updateURL    https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/KAAUH%20Lab-Robust%20Buttons%20%26%20Highlighting%20%2B%20BarcodeMRN%20Dual%20Entry.js
+// @downloadURL  https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/KAAUH%20Lab-Robust%20Buttons%20%26%20Highlighting%20%2B%20BarcodeMRN%20Dual%20Entry.js
 // @description  Performance-optimized entry engines, single-observer architecture, layout-safe grid highlighting, 2-minute persistent clicked-row highlight, live calendar rolling.
 // @match        *://his.kaauh.org/lab/*
 // @grant        GM_addStyle

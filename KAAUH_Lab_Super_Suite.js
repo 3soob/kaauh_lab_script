@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        KAAUH Lab Super Suite
 // @namespace   Violentmonkey Scripts
-// @version     15.10
+// @version     15.11
 // @updateURL    https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/KAAUH_Lab_Super_Suite.js
 // @downloadURL  https://raw.githubusercontent.com/3soob/kaauh_lab_script/main/KAAUH_Lab_Super_Suite.js
 // @description Merges verification buttons (F7/F8), dynamic alerts (including HbA1c check and improved 'No Result' detection), critical & amended result reporting, intelligently relocates misplaced alerts, and adds an advanced, flicker-free inline sample counter with a modern visual interface. Includes Server Status Indicator and single-line sticky toolbar layout.
