@@ -1,6 +1,7 @@
 name: GreasyFork-Style Version Bump
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -25,7 +26,6 @@ jobs:
           repo_raw_base = "https://raw.githubusercontent.com/3soob/kaauh_lab_script/main"
 
           for root, dirs, files in os.walk("."):
-              # Skip hidden folders like .git or .github
               dirs[:] = [d for d in dirs if not d.startswith(".")]
 
               for filename in files:
@@ -44,17 +44,14 @@ jobs:
                   encoded_path = urllib.parse.quote(rel_path)
                   raw_url = f"{repo_raw_base}/{encoded_path}"
 
-                  # 1. Increment the last numeric segment of @version (supports 1.0, 1.0.0, etc.)
                   def bump(match):
                       prefix, head, last = match.groups()
                       return f"{prefix}{head}{int(last) + 1}"
 
                   updated, count = re.subn(r"(//\s*@version\s+)([\d.]+\.)(\d+)", bump, content, count=1)
 
-                  # 2. Remove existing @updateURL / @downloadURL to prevent duplicates
                   updated = re.sub(r"^//\s*@(updateURL|downloadURL)\s+.*\r?\n?", "", updated, flags=re.MULTILINE)
 
-                  # 3. Insert @updateURL and @downloadURL directly below @version
                   url_block = f"\n// @updateURL    {raw_url}\n// @downloadURL  {raw_url}"
                   updated = re.sub(r"(//\s*@version\s+[^\r\n]+)", r"\1" + url_block, updated, count=1)
 
